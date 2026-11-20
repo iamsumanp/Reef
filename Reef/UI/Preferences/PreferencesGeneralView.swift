@@ -18,6 +18,7 @@ struct PreferencesGeneralView: View {
     @AppStorage("instantSwitch") private var instantSwitch = "never"
     @AppStorage(WindowThumbnailer.preferenceKey) private var showWindowPreviews = true
     @AppStorage(SwitcherStyle.preferenceKey) private var switcherStyle = SwitcherStyle.grid.rawValue
+    @AppStorage(CyclePanelState.confirmLaunchKey) private var confirmBeforeLaunch = true
     
     @State private var hasAccessibilityPermission = AXIsProcessTrusted()
     @State private var hasScreenRecordingPermission = WindowThumbnailer.hasPermission
@@ -28,7 +29,7 @@ struct PreferencesGeneralView: View {
     }
 
     private var formHeight: CGFloat {
-        var height: CGFloat = showWindowPreviews ? 300 : 264
+        var height: CGFloat = showWindowPreviews ? 336 : 300
         if !hasAccessibilityPermission { height += 70 }
         if needsScreenRecordingPermission { height += 70 }
         return height
@@ -107,6 +108,8 @@ struct PreferencesGeneralView: View {
                     }
                     .pickerStyle(.menu)
                 }
+
+                Toggle("Ask before opening apps that aren't running", isOn: $confirmBeforeLaunch)
 
                 Picker("Instant switch:", selection: $instantSwitch) {
                     Text("Never").tag("never")

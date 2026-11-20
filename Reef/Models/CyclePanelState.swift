@@ -43,6 +43,22 @@ final class CyclePanelState: ObservableObject {
     @Published var displayTitles: [CGWindowID: String] = [:]
     /// Second line per window: website, folder, file location or screen.
     @Published var details: [CGWindowID: WindowDetail] = [:]
+    /// Set while asking "press 3 again to open" for an app that is not running.
+    @Published var launchPrompt: LaunchPrompt?
+
+    struct LaunchPrompt: Equatable {
+        /// The number key that opened the switcher, e.g. "3".
+        let key: String
+        /// The keys held with it, e.g. "⌥".
+        let modifiers: String
+    }
+
+    /// UserDefaults key: ask before launching an app that is not running (default on).
+    static let confirmLaunchKey = "confirmBeforeLaunch"
+
+    static var confirmsLaunch: Bool {
+        UserDefaults.standard.object(forKey: confirmLaunchKey) as? Bool ?? true
+    }
     
     var windows: [Window] {
         items.compactMap { item in
@@ -92,6 +108,7 @@ final class CyclePanelState: ObservableObject {
         
         self.selectedIndex = 0
         self.applicationIcon = application.runningApplication?.icon
+            ?? application.bundleUrl.map { NSWorkspace.shared.icon(forFile: $0.path) }
 
         // Previews need the preference on, Screen Recording allowed, and real windows to show.
         self.showsPreviews = !windows.isEmpty
@@ -176,5 +193,6 @@ final class CyclePanelState: ObservableObject {
         applicationIcon = nil
         displayTitles = [:]
         details = [:]
+        launchPrompt = nil
     }
 }

@@ -107,6 +107,16 @@ final class ModifierManager: ObservableObject {
         return modifiers
     }
     
+    /// "⌥" or "⌃ ⇧": the keys held to open the switcher.
+    var activateModifierSymbols: String {
+        var symbols: [String] = []
+        if activateControl { symbols.append("⌃") }
+        if activateOption  { symbols.append("⌥") }
+        if activateShift   { symbols.append("⇧") }
+        if activateCommand { symbols.append("⌘") }
+        return symbols.joined(separator: " ")
+    }
+
     var profileModifierSymbols: String {
         var symbols = ""
         if profileControl  { symbols += "⌃ " }

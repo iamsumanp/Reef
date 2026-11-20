@@ -80,6 +80,10 @@ struct CyclePanelLayout {
     let showsDetails: Bool
     let showsPreviews: Bool
     let itemCount: Int
+    /// "Slack isn't open — press 3 again" instead of the window list.
+    var showsLaunchPrompt = false
+
+    static let launchPromptHeight: CGFloat = 118
 
     /// The style actually drawn: without previews every style falls back to the plain list.
     var effectiveStyle: SwitcherStyle? { showsPreviews ? style : nil }
@@ -172,6 +176,9 @@ struct CyclePanelLayout {
     }
 
     var contentHeight: CGFloat {
+        if showsLaunchPrompt {
+            return Self.headerHeight + Self.dividerHeight + Self.launchPromptHeight
+        }
         let body: CGFloat
         switch effectiveStyle {
         case .listWithPreview: body = max(listHeight, previewPaneHeight)
@@ -196,7 +203,8 @@ struct CyclePanelView: View {
             style: SwitcherStyle(rawValue: styleRawValue) ?? .grid,
             showsDetails: !state.windows.isEmpty,
             showsPreviews: state.showsPreviews,
-            itemCount: state.items.count
+            itemCount: state.items.count,
+            showsLaunchPrompt: state.launchPrompt != nil
         )
     }
 
@@ -212,12 +220,21 @@ struct CyclePanelView: View {
             Divider()
                 .background(Color.white.opacity(0.2))
 
+            if let prompt = state.launchPrompt {
+                LaunchPromptView(
+                    appName: state.applicationTitle,
+                    icon: state.applicationIcon,
+                    prompt: prompt
+                )
+                .frame(height: CyclePanelLayout.launchPromptHeight)
+            } else {
             switch layout.effectiveStyle {
             case .listWithPreview: listWithPreview
             case .largeThumbnails: windowList(thumbnailSize: CyclePanelLayout.largeRowThumbnailSize)
             case .grid: grid
             case .spotlight: spotlight
             case nil: windowList(thumbnailSize: nil)
+            }
             }
         }
         .frame(width: layout.panelWidth, alignment: .top)
@@ -407,6 +424,67 @@ struct CyclePanelView: View {
 }
 
 // MARK: - Pieces
+
+/// Shown when the bound app is not running: launching waits for a second press.
+struct LaunchPromptView: View {
+    let appName: String
+    let icon: NSImage?
+    let prompt: CyclePanelState.LaunchPrompt
+
+    var body: some View {
+        HStack(spacing: 16) {
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 56, height: 56)
+                    .opacity(0.85)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(appName) isn't open")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    Text("Press")
+                    KeyCap(text: prompt.key)
+                    Text("again to open it")
+                }
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.85))
+
+                Text("Let go of \(prompt.modifiers) or press Esc to cancel")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+    }
+}
+
+/// A key drawn like a keyboard key.
+struct KeyCap: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundColor(.white)
+            .frame(minWidth: 22, minHeight: 22)
+            .padding(.horizontal, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+            )
+    }
+}
 
 struct CyclePanelRow: View {
     /// What to draw in the preview slot. A row without one keeps the compact text-only look.

@@ -111,7 +111,7 @@ final class ShortcutController {
             if cycleController.isShowingSwitcher(for: binding) {
                 cycleController.cycleNext()
             } else {
-                cycleController.showSwitcher(for: binding)
+                cycleController.showSwitcher(for: binding, number: number)
             }
             
             return
@@ -125,7 +125,7 @@ final class ShortcutController {
             startIndex = 1
         }
         
-        cycleController.showSwitcher(for: binding, startIndex: startIndex)
+        cycleController.showSwitcher(for: binding, startIndex: startIndex, number: number)
     }
     
     func handleProfile(number: Int) {

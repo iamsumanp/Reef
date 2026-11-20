@@ -34,7 +34,8 @@ final class CyclePanelController: NSObject {
             style: SwitcherStyle.current,
             showsDetails: !state.windows.isEmpty,
             showsPreviews: state.showsPreviews,
-            itemCount: state.items.count
+            itemCount: state.items.count,
+            showsLaunchPrompt: state.launchPrompt != nil
         )
     }
     private var panelContentWidth: CGFloat { layout.panelWidth }
@@ -44,7 +45,7 @@ final class CyclePanelController: NSObject {
 
     private var minPanelContentHeight: CGFloat {
         // Minimum height that still matches the layout for one row.
-        CyclePanelLayout(style: layout.style, showsDetails: layout.showsDetails, showsPreviews: layout.showsPreviews, itemCount: 1).contentHeight
+        CyclePanelLayout(style: layout.style, showsDetails: layout.showsDetails, showsPreviews: layout.showsPreviews, itemCount: 1, showsLaunchPrompt: layout.showsLaunchPrompt).contentHeight
     }
     
     init(modifierManager: ModifierManager) {
@@ -72,9 +73,15 @@ final class CyclePanelController: NSObject {
     }
     
     // Called when user presses the configured window-switching shortcut.
-    func showSwitcher(for application: Application, startIndex: Int = 0) {
+    func showSwitcher(for application: Application, startIndex: Int = 0, number: Int? = nil) {
         currentApplication = application
         state.setApplication(application)
+
+        // An app that is not running is only launched after its number is pressed again.
+        if CyclePanelState.confirmsLaunch, let number,
+           case .action(.launchApp) = state.currentItem {
+            state.launchPrompt = .init(key: "\(number)", modifiers: modifierManager.activateModifierSymbols)
+        }
         
         // Instant switch if the user opted in and there is one actual window
         if UserDefaults.standard.string(forKey: "instantSwitch") == "whenOnlyOneWindowOpen",
@@ -189,6 +196,12 @@ final class CyclePanelController: NSObject {
     
     // Called when user presses the switcher shortcut again while panel is visible.
     func cycleNext() {
+        // Pressing the number again is the "yes, open it".
+        if state.launchPrompt != nil {
+            state.launchPrompt = nil
+            activateSelectedWindow()
+            return
+        }
         state.cycleNext()
     }
     
@@ -220,6 +233,12 @@ final class CyclePanelController: NSObject {
             window.focus()
             hideSwitcher()
         case .action:
+            // Letting go without confirming cancels the launch.
+            if state.launchPrompt != nil {
+                hideSwitcher()
+                return
+            }
+
             let application = currentApplication
             hideSwitcher()
             
