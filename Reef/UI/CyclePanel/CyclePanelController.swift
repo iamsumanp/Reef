@@ -26,6 +26,9 @@ final class CyclePanelController: NSObject {
 
     var isShowingOtherApps: Bool { state.mode == .otherApps }
 
+    /// 1…9 then 0, as on the keyboard.
+    private static let keyboardNumberOrder = Array(1...9) + [0]
+
     private static func screenUnderMouse() -> NSScreen? {
         let mouse = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
@@ -151,7 +154,7 @@ final class CyclePanelController: NSObject {
         currentApplication = nil
         state.setOtherApps(result)
         state.modifierSymbols = modifierManager.activateModifierSymbols
-        state.freeNumbers = (0...9).filter { profile?.bundleIdentifier(for: $0) == nil }
+        state.freeNumbers = Self.keyboardNumberOrder.filter { profile?.bundleIdentifier(for: $0) == nil }
 
         // Like ⌘-Tab: the first press goes to the window before the current one.
         if state.items.count > 1, case let .window(first) = state.items[0], first.id == frontWindowID {
@@ -178,7 +181,7 @@ final class CyclePanelController: NSObject {
         }
 
         profileManager.bind(bundleIdentifier: bundleIdentifier, to: number)
-        state.freeNumbers = (0...9).filter { profileManager.bundleIdentifier(for: $0) == nil }
+        state.freeNumbers = Self.keyboardNumberOrder.filter { profileManager.bundleIdentifier(for: $0) == nil }
         showFooterMessage("\(app.title) is now on \(state.modifierSymbols) \(number)")
         return true
     }
