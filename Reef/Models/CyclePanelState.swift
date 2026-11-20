@@ -136,6 +136,8 @@ final class CyclePanelState: ObservableObject {
     
     func setApplication(_ application: Application) {
         self.applicationTitle = application.title
+        // A prompt for another app (e.g. ⌥ 5 for a closed app, then ⌥ 1) must not carry over.
+        launchPrompt = nil
         mode = .application
         filterText = ""
         isSticky = false
