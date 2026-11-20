@@ -8,6 +8,9 @@ The macOS window manager that gives every app its own Alt-Tab.
 
 [How we made Reef (YouTube)](https://youtu.be/niRCi5zJvHU)
 
+> **About this fork:** adds window previews to the switcher, so windows with the same or
+> similar titles are easy to tell apart. See [Fork additions](#fork-additions).
+
 ## Key Features
 
 Reef lets you bind applications to number keys and cycle through their windows with an Alt-Tab-like interface.
@@ -81,6 +84,30 @@ You can find your macOS version from the ** → About This Mac** page.
 Please share issues and feedback via the [GitHub issues page](https://github.com/gouwsxander/Reef/issues).
 
 Feel free to submit pull requests, though we can't guarantee that we'll get to them.
+
+
+## Fork additions
+
+- **Window previews.** Each window in the switcher shows a live picture of itself. Four layouts
+  are available under **Preferences → General → Switcher style**: grid of cards (default),
+  list + big preview, list with large pictures, and big preview + strip.
+- **A second line per window.** Browsers show the website (`claude.ai`), Finder shows the folder
+  (`~/Desktop/project`), document apps show the file's folder; "Minimized" or the monitor name
+  appear when they help tell windows apart.
+- **Full titles.** The part every window of an app shares (such as a browser profile name) is
+  left out, long titles wrap to two lines, and Dia's shortened window titles are replaced with
+  the full page title from its address bar.
+- **Centred on your screen.** The switcher opens in the middle of the screen the mouse is on.
+
+Previews need **Screen Recording** (System Settings → Privacy & Security → Screen & System Audio
+Recording). Without it, the switcher keeps the original text-only look, with the second line.
+
+### Building without Xcode
+
+`./build.sh` builds, signs and installs `~/Applications/Reef.app` with only the Command Line
+Tools (`Package.swift` mirrors the Xcode target). It uses its own bundle id and no update feed, so
+it can sit next to the official app. Put a signing identity in a gitignored `build.local.sh`
+(`REEF_SIGN_KEYCHAIN`, `REEF_SIGN_PASSWORD`, `REEF_SIGN_NAME`) to keep permissions across rebuilds.
 
 
 ## FAQ

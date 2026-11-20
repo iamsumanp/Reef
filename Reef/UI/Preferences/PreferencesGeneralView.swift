@@ -16,8 +16,23 @@ struct PreferencesGeneralView: View {
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("defaultNumberOrder") private var defaultNumberOrder = "rightHanded"
     @AppStorage("instantSwitch") private var instantSwitch = "never"
+    @AppStorage(WindowThumbnailer.preferenceKey) private var showWindowPreviews = true
+    @AppStorage(SwitcherStyle.preferenceKey) private var switcherStyle = SwitcherStyle.grid.rawValue
     
     @State private var hasAccessibilityPermission = AXIsProcessTrusted()
+    @State private var hasScreenRecordingPermission = WindowThumbnailer.hasPermission
+
+    // Previews are switched on but macOS has not allowed Reef to capture windows yet.
+    private var needsScreenRecordingPermission: Bool {
+        showWindowPreviews && !hasScreenRecordingPermission
+    }
+
+    private var formHeight: CGFloat {
+        var height: CGFloat = showWindowPreviews ? 300 : 264
+        if !hasAccessibilityPermission { height += 70 }
+        if needsScreenRecordingPermission { height += 70 }
+        return height
+    }
     
     // Timer to poll for accessibility permission changes
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -48,6 +63,30 @@ struct PreferencesGeneralView: View {
                 }
             }
             
+            // Screen Recording Permission Warning (only needed for window previews)
+            if needsScreenRecordingPermission {
+                HStack(spacing: 12) {
+                    Image(systemName: "rectangle.dashed.badge.record")
+                        .foregroundColor(.yellow)
+                        .imageScale(.large)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Screen Recording Needed for Window Previews")
+                            .fontWeight(.medium)
+                        Text("Allow Reef under Screen & System Audio Recording, then relaunch it")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Open Settings") {
+                        requestScreenRecordingPermission()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
             Section {
                 Toggle("Launch Reef at login", isOn: $launchOnLogin)
                     .onChange(of: launchOnLogin) { _, newValue in
@@ -58,6 +97,16 @@ struct PreferencesGeneralView: View {
             Section {
 //                Toggle("Hide menubar icon", isOn: $hideMenubarIcon)
                 Toggle("Show active profile in menu bar", isOn: $showActiveProfileInMenuBar)
+                Toggle("Show window previews in switcher", isOn: $showWindowPreviews)
+
+                if showWindowPreviews {
+                    Picker("Switcher style:", selection: $switcherStyle) {
+                        ForEach(SwitcherStyle.allCases) { style in
+                            Text(style.title).tag(style.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
 
                 Picker("Instant switch:", selection: $instantSwitch) {
                     Text("Never").tag("never")
@@ -75,10 +124,18 @@ struct PreferencesGeneralView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: hasAccessibilityPermission ? 224 : 294)
+        .frame(height: formHeight)
         .onReceive(timer) { _ in
             // Poll for permission changes
             hasAccessibilityPermission = AXIsProcessTrusted()
+            hasScreenRecordingPermission = WindowThumbnailer.hasPermission
+        }
+    }
+
+    private func requestScreenRecordingPermission() {
+        // The system prompt only ever appears once; after that the switch lives in System Settings.
+        if !WindowThumbnailer.requestPermission() {
+            WindowThumbnailer.openScreenRecordingSettings()
         }
     }
     

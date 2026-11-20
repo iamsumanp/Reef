@@ -6,3 +6,8 @@
 **/*.xcuserstate
 
 Config/LocalSigning.xcconfig
+
+# Command-line build (build.sh)
+.build/
+build/
+build.local.sh

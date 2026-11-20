@@ -66,6 +66,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager = PreferencesController()
         
         NSApp.setActivationPolicy(.accessory)
+
+        // Window previews in the switcher need Screen Recording; ask once.
+        WindowThumbnailer.requestPermissionOnFirstLaunchIfNeeded()
+
+        #if REEF_DEBUG
+        WindowDetailsDebug.install()
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {

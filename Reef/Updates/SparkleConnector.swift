@@ -58,11 +58,14 @@ final class SparkleConnector: ObservableObject {
     func checkForUpdates() {
         guard !isPreview else { return }
         startUpdaterIfNeeded()
+        guard didStartUpdater else { return }
         NSApp.activate(ignoringOtherApps: true)
         controller.checkForUpdates(nil)
     }
 
     private func startUpdaterIfNeeded() {
+        // Builds without an update feed (e.g. local builds from build.sh) never update themselves.
+        guard Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil else { return }
         guard !didStartUpdater else { return }
         controller.startUpdater()
         didStartUpdater = true

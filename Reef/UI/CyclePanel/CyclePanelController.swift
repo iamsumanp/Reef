@@ -19,21 +19,32 @@ final class CyclePanelController: NSObject {
     private var keyDownMonitor: Any?
     private var currentApplication: Application?
     private var panelAnchorCenter: CGPoint?
+    private var targetScreen: NSScreen?
 
-    private let panelContentWidth: CGFloat = 400
-    private let maxPanelFrameHeightCap: CGFloat = 520
+    private static func screenUnderMouse() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+    }
 
-    // Keep these aligned with CyclePanelView.
-    private let headerHeight: CGFloat = 44
-    private let dividerHeight: CGFloat = 1
-    private let rowHeight: CGFloat = 44
-    private let rowSpacing: CGFloat = 4
-    private let listVerticalPadding: CGFloat = 8
+    private let maxPanelFrameHeightCap: CGFloat = 620
+
+    // Shared with CyclePanelView through CyclePanelLayout.
+    private var layout: CyclePanelLayout {
+        CyclePanelLayout(
+            style: SwitcherStyle.current,
+            showsDetails: !state.windows.isEmpty,
+            showsPreviews: state.showsPreviews,
+            itemCount: state.items.count
+        )
+    }
+    private var panelContentWidth: CGFloat { layout.panelWidth }
+    private var thumbnailTask: Task<Void, Never>?
+    private var detailsTask: Task<Void, Never>?
     private static let releaseModifierMask: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
 
     private var minPanelContentHeight: CGFloat {
         // Minimum height that still matches the layout for one row.
-        headerHeight + dividerHeight + (listVerticalPadding * 2) + rowHeight
+        CyclePanelLayout(style: layout.style, showsDetails: layout.showsDetails, showsPreviews: layout.showsPreviews, itemCount: 1).contentHeight
     }
     
     init(modifierManager: ModifierManager) {
@@ -43,7 +54,7 @@ final class CyclePanelController: NSObject {
     }
     
     private func createPanel() {
-        let contentRect = NSRect(x: 0, y: 0, width: panelContentWidth, height: 300)
+        let contentRect = NSRect(x: 0, y: 0, width: 400, height: 300)
         panel = CyclePanel(contentRect: contentRect)
         
         let contentView = CyclePanelView(state: state)
@@ -79,8 +90,16 @@ final class CyclePanelController: NSObject {
         }
         
         if !panel.isVisible {
-            panel.center()
-            panelAnchorCenter = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+            // The exact middle of the screen the mouse is on. (NSWindow.center() sits
+            // the window in the upper third, and always on the main screen.)
+            let screen = Self.screenUnderMouse()
+            targetScreen = screen
+            if let visibleFrame = screen?.visibleFrame {
+                panelAnchorCenter = CGPoint(x: visibleFrame.midX, y: visibleFrame.midY)
+            } else {
+                panel.center()
+                panelAnchorCenter = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+            }
             updatePanelSize()
             panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -92,17 +111,62 @@ final class CyclePanelController: NSObject {
             }
             updatePanelSize()
         }
+
+        loadThumbnails()
+        loadDetails()
+    }
+
+    /// Looks up each window's website / folder / screen in the background; rows get
+    /// their second line when it arrives.
+    private func loadDetails() {
+        detailsTask?.cancel()
+        detailsTask = nil
+
+        let windows = state.windows
+        guard !windows.isEmpty else { return }
+
+        let ids = windows.map(\.id)
+        nonisolated(unsafe) let elements = windows.map(\.element)
+        let bundleIdentifier = currentApplication?.bundleIdentifier
+
+        detailsTask = Task { [weak self] in
+            let facts = await Task.detached(priority: .userInitiated) {
+                WindowDetails.facts(for: elements, bundleIdentifier: bundleIdentifier)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+
+            let details = WindowDetails.details(for: facts, bundleIdentifier: bundleIdentifier)
+            self.state.setDetails(Dictionary(zip(ids, details), uniquingKeysWith: { first, _ in first }))
+        }
+    }
+
+    /// Captures a fresh preview of every listed window. They appear as they arrive.
+    private func loadThumbnails() {
+        thumbnailTask?.cancel()
+        thumbnailTask = nil
+
+        guard state.showsPreviews else { return }
+
+        let windowIDs = state.windows.map(\.id).filter { $0 != 0 }
+        let scale = (targetScreen ?? panel.screen ?? NSScreen.main)?.backingScaleFactor ?? 2
+
+        thumbnailTask = Task { [weak self] in
+            await WindowThumbnailer.shared.captureThumbnails(
+                for: windowIDs,
+                fitting: CyclePanelLayout.captureSize,
+                scale: scale
+            ) { windowID, image in
+                guard !Task.isCancelled else { return }
+                self?.state.setThumbnail(image, for: windowID)
+            }
+        }
     }
 
     private func updatePanelSize() {
-        let itemCount = state.items.count
-        let rowsHeight = CGFloat(itemCount) * rowHeight
-        let spacingHeight = CGFloat(max(0, itemCount - 1)) * rowSpacing
-        let listHeight = rowsHeight + spacingHeight + (listVerticalPadding * 2)
-        let desiredContentHeight = headerHeight + dividerHeight + listHeight
+        let desiredContentHeight = layout.contentHeight
 
         let maxContentHeightByScreen: CGFloat = {
-            let visibleFrameHeight = (panel.screen ?? NSScreen.main)?.visibleFrame.height ?? maxPanelFrameHeightCap
+            let visibleFrameHeight = (targetScreen ?? panel.screen ?? NSScreen.main)?.visibleFrame.height ?? maxPanelFrameHeightCap
             let maxFrameHeight = min(maxPanelFrameHeightCap, visibleFrameHeight * 0.6)
             let maxFrameRect = NSRect(x: 0, y: 0, width: panelContentWidth, height: maxFrameHeight)
             return panel.contentRect(forFrameRect: maxFrameRect).height
@@ -174,12 +238,17 @@ final class CyclePanelController: NSObject {
     }
     
     private func hideSwitcher() {
+        thumbnailTask?.cancel()
+        thumbnailTask = nil
+        detailsTask?.cancel()
+        detailsTask = nil
         removeFlagsMonitor()
         removeKeyDownMonitor()
         panel.orderOut(nil)
         state.reset()
         currentApplication = nil
         panelAnchorCenter = nil
+        targetScreen = nil
     }
     
     private func installFlagsMonitor() {
