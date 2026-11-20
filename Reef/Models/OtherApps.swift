@@ -15,7 +15,7 @@ enum OtherApps {
     struct Result {
         /// Windows of unbound apps, frontmost first.
         var windows: [Window]
-        /// Unbound apps that are running but show no window on this desktop.
+        /// Unbound apps whose windows are all on other desktops.
         var windowlessApps: [Application]
         /// For those apps: their frontmost window on another desktop, if any, so the
         /// card can still show a picture. Keyed by process id.
@@ -75,14 +75,13 @@ enum OtherApps {
             if orderA != orderB { return orderA < orderB }
             return a.application.title.localizedCaseInsensitiveCompare(b.application.title) == .orderedAscending
         }
+        // Apps with no window here may have one on another desktop. Apps with no window
+        // anywhere (running in the background, like iTerm2 after closing its last window)
+        // are left out, as in Mission Control.
         let elsewhere = otherDesktopWindows(for: windowlessApps)
-        // Apps with a window on another desktop (so, a picture) first, then by name.
-        windowlessApps.sort { a, b in
-            let hasA = a.pid.flatMap { elsewhere[$0] } != nil
-            let hasB = b.pid.flatMap { elsewhere[$0] } != nil
-            if hasA != hasB { return hasA }
-            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
-        }
+        windowlessApps = windowlessApps
+            .filter { app in app.pid.flatMap { elsewhere[$0] } != nil }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
         return Result(windows: windows, windowlessApps: windowlessApps, otherDesktopWindows: elsewhere)
     }
