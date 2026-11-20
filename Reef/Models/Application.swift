@@ -242,6 +242,14 @@ class Application {
            lastWindow.title == "Finder" {
             windows.removeLast()
         }
+
+        // Accessibility only lists windows in the spaces on screen. Add the rest
+        // (full-screen apps, other desktops) from the window server.
+        if let pid {
+            let known = Set(windows.map(\.id))
+            windows += Spaces.offscreenWindows(pid: pid, excluding: known)
+                .map { Window(offscreen: $0, self) }
+        }
         
         return windows
     }

@@ -268,8 +268,6 @@ struct CyclePanelView: View {
             return state.displayTitles[window.id] ?? window.title
         case .action(let action):
             return action.title
-        case .app(let app):
-            return state.otherDesktopWindow(for: app)?.title ?? app.title
         }
     }
 
@@ -280,9 +278,6 @@ struct CyclePanelView: View {
             // Several apps are mixed together here, so name the app.
             guard state.mode == .otherApps else { return detail }
             return [window.application.title, detail].compactMap { $0 }.joined(separator: " · ")
-        case .app(let app):
-            guard state.otherDesktopWindow(for: app) != nil else { return "No window on this desktop" }
-            return "\(app.title) · On another desktop"
         case .action:
             return nil
         }
@@ -293,7 +288,6 @@ struct CyclePanelView: View {
         guard state.mode == .otherApps else { return state.applicationIcon }
         switch item {
         case .window(let window): return window.application.runningApplication?.icon
-        case .app(let app): return app.runningApplication?.icon
         case .action: return nil
         }
     }
@@ -303,7 +297,6 @@ struct CyclePanelView: View {
         guard state.mode == .otherApps else { return nil }
         switch item {
         case .window(let window): return window.application.runningApplication?.icon
-        case .app(let app): return app.runningApplication?.icon
         case .action: return nil
         }
     }
@@ -311,7 +304,6 @@ struct CyclePanelView: View {
     private func itemImage(_ item: CyclePanelItem) -> NSImage? {
         switch item {
         case .window(let window): return state.thumbnails[window.id]
-        case .app(let app): return state.otherDesktopWindow(for: app).flatMap { state.thumbnails[$0.id] }
         case .action: return nil
         }
     }

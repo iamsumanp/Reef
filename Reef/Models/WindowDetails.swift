@@ -347,9 +347,9 @@ enum WindowDetailsDebug {
             let result = OtherApps.collect(excludingBundleIdentifiers: bound)
             let ms = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
             var out = "bound: \(bound.sorted())\ncollect took \(ms) ms\n\nwindows (front first):\n"
-            for window in result.windows { out += "  [\(window.id)] \(window.application.title): \(window.title)\n" }
-            out += "\napps with no window here:\n"
-            for app in result.windowlessApps { out += "  \(app.title) (\(app.bundleIdentifier ?? "?"))\n" }
+            for window in result.windows {
+                out += "  [\(window.id)] \(window.application.title): \(window.title)\(window.offscreenPlacement.map { "  (\($0.label))" } ?? "")\n"
+            }
             let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Reef")
             try? out.write(to: dir.appendingPathComponent("others.txt"), atomically: true, encoding: .utf8)
             return
@@ -378,7 +378,7 @@ enum WindowDetailsDebug {
             out += "== \(app.title) (\(app.bundleIdentifier ?? "?")) — \(windows.count) windows, \(ms) ms\n"
             for (index, window) in windows.enumerated() {
                 let f = facts[index]
-                out += "  [\(window.id)] \"\(window.title)\"\n"
+                out += "  [\(window.id)] \"\(window.title)\"\(window.offscreenPlacement.map { "  (\($0.label))" } ?? "")\n"
                 out += "      shown as: \"\(titles[index])\" / \(details[index].text ?? "—")\n"
                 out += "      page=\(f.pageTitle ?? "-") url=\(f.url?.absoluteString ?? "-") document=\(f.documentURL?.absoluteString ?? "-") min=\(f.isMinimized) frame=\(f.frame.map { "\($0)" } ?? "-")\n"
                 let names = (window.element.attributeNames ?? []).joined(separator: ",")

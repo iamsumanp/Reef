@@ -25,8 +25,6 @@ enum CyclePanelAction {
 enum CyclePanelItem {
     case window(Window)
     case action(CyclePanelAction)
-    /// A running app with no window on this desktop (other-apps switcher only).
-    case app(Application)
 }
 
 @MainActor
@@ -65,20 +63,8 @@ final class CyclePanelState: ObservableObject {
     @Published var isSticky = false
     /// Everything the other-apps switcher found, before filtering.
     private(set) var allItems: [CyclePanelItem] = []
-    /// Windows on other desktops that stand in for apps with none here (by process id).
-    @Published var otherDesktopWindows: [pid_t: OtherApps.RemoteWindow] = [:]
-
-    func otherDesktopWindow(for app: Application) -> OtherApps.RemoteWindow? {
-        app.pid.flatMap { otherDesktopWindows[$0] }
-    }
-
     /// Every window whose picture the panel shows.
-    var previewWindowIDs: [CGWindowID] {
-        windows.map(\.id) + items.compactMap { item in
-            if case let .app(app) = item { return otherDesktopWindow(for: app)?.id }
-            return nil
-        }
-    }
+    var previewWindowIDs: [CGWindowID] { windows.map(\.id) }
 
     /// The panel is sized for every item found, so it doesn't jump while filtering.
     var layoutItemCount: Int {
@@ -236,12 +222,11 @@ final class CyclePanelState: ObservableObject {
         isSticky = false
         footerMessage = nil
 
-        allItems = result.windows.map(CyclePanelItem.window) + result.windowlessApps.map(CyclePanelItem.app)
+        allItems = result.windows.map(CyclePanelItem.window)
         items = allItems
         selectedIndex = 0
-        otherDesktopWindows = result.otherDesktopWindows
 
-        showsPreviews = (!result.windows.isEmpty || !result.otherDesktopWindows.isEmpty)
+        showsPreviews = !result.windows.isEmpty
             && WindowThumbnailer.isEnabledInPreferences
             && WindowThumbnailer.hasPermission
 
@@ -293,9 +278,6 @@ final class CyclePanelState: ObservableObject {
         case .window(let window):
             let title = displayTitles[window.id] ?? window.title
             return [window.application.title, title, details[window.id]?.text ?? ""].joined(separator: " ")
-        case .app(let app):
-            let elsewhere = otherDesktopWindow(for: app).map { "\($0.title) another desktop" } ?? ""
-            return "\(app.title) \(elsewhere)"
         case .action(let action):
             return action.title
         }
@@ -304,7 +286,6 @@ final class CyclePanelState: ObservableObject {
     private static func identity(_ item: CyclePanelItem) -> String {
         switch item {
         case .window(let window): return "w\(window.id)"
-        case .app(let app): return "a\(app.pid ?? 0)"
         case .action(let action): return "x\(action.title)"
         }
     }
@@ -313,7 +294,6 @@ final class CyclePanelState: ObservableObject {
     var currentApplication: Application? {
         switch currentItem {
         case .window(let window): return window.application
-        case .app(let app): return app
         default: return nil
         }
     }
@@ -351,6 +331,5 @@ final class CyclePanelState: ObservableObject {
         footerMessage = nil
         isSticky = false
         allItems = []
-        otherDesktopWindows = [:]
     }
 }

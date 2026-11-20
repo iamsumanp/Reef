@@ -254,8 +254,18 @@ final class CyclePanelController: NSObject {
         detailsTask?.cancel()
         detailsTask = nil
 
-        let windows = state.windows
-        guard !windows.isEmpty else { return }
+        let allWindows = state.windows
+        guard !allWindows.isEmpty else { return }
+
+        // Windows outside the spaces on screen can't be asked; their line says where they are.
+        let offscreenDetails = Dictionary(uniqueKeysWithValues: allWindows.compactMap { window in
+            window.offscreenPlacement.map { (window.id, WindowDetail(location: nil, placement: $0.label)) }
+        })
+        let windows = allWindows.filter { !$0.isOffscreen }
+        guard !windows.isEmpty else {
+            state.setDetails(offscreenDetails)
+            return
+        }
 
         // One lookup per app: the rules differ (browser, Finder, documents).
         let groups = Dictionary(grouping: windows) { $0.application.bundleIdentifier ?? "pid\($0.application.pid ?? 0)" }
@@ -272,7 +282,7 @@ final class CyclePanelController: NSObject {
             }.value
             guard !Task.isCancelled, let self else { return }
 
-            var all: [CGWindowID: WindowDetail] = [:]
+            var all = offscreenDetails
             for (group, groupFacts) in zip(work, facts) {
                 let details = WindowDetails.details(for: groupFacts, bundleIdentifier: group.bundleIdentifier)
                 for (id, detail) in zip(group.ids, details) { all[id] = detail }
@@ -372,11 +382,7 @@ final class CyclePanelController: NSObject {
         case .window(let window):
             window.focus()
             hideSwitcher()
-        case .app(let app):
-            hideSwitcher()
-            Task { @MainActor in
-                if !(await app.performNoWindowAction()) { NSSound.beep() }
-            }
+
         case .action:
             // Letting go without confirming cancels the launch.
             if state.launchPrompt != nil {
