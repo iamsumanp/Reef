@@ -291,7 +291,7 @@ final class CyclePanelController: NSObject {
 
         guard state.showsPreviews else { return }
 
-        let windowIDs = state.windows.map(\.id).filter { $0 != 0 }
+        let windowIDs = state.previewWindowIDs.filter { $0 != 0 }
         let scale = (targetScreen ?? panel.screen ?? NSScreen.main)?.backingScaleFactor ?? 2
 
         thumbnailTask = Task { [weak self] in

@@ -17,8 +17,18 @@ enum OtherApps {
         var windows: [Window]
         /// Unbound apps that are running but show no window on this desktop.
         var windowlessApps: [Application]
+        /// For those apps: their frontmost window on another desktop, if any, so the
+        /// card can still show a picture. Keyed by process id.
+        var otherDesktopWindows: [pid_t: RemoteWindow] = [:]
 
         var isEmpty: Bool { windows.isEmpty && windowlessApps.isEmpty }
+    }
+
+    /// A window Reef can see and capture but not reach through Accessibility
+    /// (Accessibility only lists windows on the current desktop).
+    struct RemoteWindow: Equatable {
+        let id: CGWindowID
+        let title: String
     }
 
     /// UserDefaults key for turning the ⌥ + ` switcher on or off (default on).
@@ -65,11 +75,40 @@ enum OtherApps {
             if orderA != orderB { return orderA < orderB }
             return a.application.title.localizedCaseInsensitiveCompare(b.application.title) == .orderedAscending
         }
-        windowlessApps.sort {
-            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        let elsewhere = otherDesktopWindows(for: windowlessApps)
+        // Apps with a window on another desktop (so, a picture) first, then by name.
+        windowlessApps.sort { a, b in
+            let hasA = a.pid.flatMap { elsewhere[$0] } != nil
+            let hasB = b.pid.flatMap { elsewhere[$0] } != nil
+            if hasA != hasB { return hasA }
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
 
-        return Result(windows: windows, windowlessApps: windowlessApps)
+        return Result(windows: windows, windowlessApps: windowlessApps, otherDesktopWindows: elsewhere)
+    }
+
+    /// The frontmost titled, real-sized window of each app, from the window server's
+    /// list of every window on every desktop.
+    private static func otherDesktopWindows(for apps: [Application]) -> [pid_t: RemoteWindow] {
+        let pids = Set(apps.compactMap(\.pid))
+        guard !pids.isEmpty,
+              let info = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]]
+        else { return [:] }
+
+        var found: [pid_t: RemoteWindow] = [:]
+        for entry in info {
+            guard let pid = entry[kCGWindowOwnerPID as String] as? pid_t, pids.contains(pid), found[pid] == nil,
+                  (entry[kCGWindowLayer as String] as? Int) == 0,
+                  let id = entry[kCGWindowNumber as String] as? CGWindowID,
+                  let title = entry[kCGWindowName as String] as? String, !title.isEmpty,
+                  let bounds = entry[kCGWindowBounds as String] as? [String: CGFloat],
+                  (bounds["Width"] ?? 0) >= 120, (bounds["Height"] ?? 0) >= 120,
+                  (entry[kCGWindowAlpha as String] as? Double ?? 1) > 0
+            else { continue }
+            found[pid] = RemoteWindow(id: id, title: title)
+        }
+        return found
     }
 
     /// Real windows only: no palettes, tooltips or zero-sized helpers.

@@ -65,6 +65,20 @@ final class CyclePanelState: ObservableObject {
     @Published var isSticky = false
     /// Everything the other-apps switcher found, before filtering.
     private(set) var allItems: [CyclePanelItem] = []
+    /// Windows on other desktops that stand in for apps with none here (by process id).
+    @Published var otherDesktopWindows: [pid_t: OtherApps.RemoteWindow] = [:]
+
+    func otherDesktopWindow(for app: Application) -> OtherApps.RemoteWindow? {
+        app.pid.flatMap { otherDesktopWindows[$0] }
+    }
+
+    /// Every window whose picture the panel shows.
+    var previewWindowIDs: [CGWindowID] {
+        windows.map(\.id) + items.compactMap { item in
+            if case let .app(app) = item { return otherDesktopWindow(for: app)?.id }
+            return nil
+        }
+    }
 
     /// The panel is sized for every item found, so it doesn't jump while filtering.
     var layoutItemCount: Int {
@@ -206,7 +220,7 @@ final class CyclePanelState: ObservableObject {
 
     /// Stores a freshly captured preview, ignoring windows that are no longer listed.
     func setThumbnail(_ image: NSImage, for windowID: CGWindowID) {
-        guard windows.contains(where: { $0.id == windowID }) else { return }
+        guard previewWindowIDs.contains(windowID) else { return }
         thumbnails[windowID] = image
     }
     
@@ -223,16 +237,17 @@ final class CyclePanelState: ObservableObject {
         allItems = result.windows.map(CyclePanelItem.window) + result.windowlessApps.map(CyclePanelItem.app)
         items = allItems
         selectedIndex = 0
+        otherDesktopWindows = result.otherDesktopWindows
 
-        showsPreviews = !result.windows.isEmpty
+        showsPreviews = (!result.windows.isEmpty || !result.otherDesktopWindows.isEmpty)
             && WindowThumbnailer.isEnabledInPreferences
             && WindowThumbnailer.hasPermission
 
         var thumbnails: [CGWindowID: NSImage] = [:]
         if showsPreviews {
-            for window in result.windows {
-                if let cached = WindowThumbnailer.shared.cachedThumbnail(for: window.id) {
-                    thumbnails[window.id] = cached
+            for id in previewWindowIDs {
+                if let cached = WindowThumbnailer.shared.cachedThumbnail(for: id) {
+                    thumbnails[id] = cached
                 }
             }
         }
@@ -277,7 +292,8 @@ final class CyclePanelState: ObservableObject {
             let title = displayTitles[window.id] ?? window.title
             return [window.application.title, title, details[window.id]?.text ?? ""].joined(separator: " ")
         case .app(let app):
-            return app.title
+            let elsewhere = otherDesktopWindow(for: app).map { "\($0.title) another desktop" } ?? ""
+            return "\(app.title) \(elsewhere)"
         case .action(let action):
             return action.title
         }
@@ -333,5 +349,6 @@ final class CyclePanelState: ObservableObject {
         footerMessage = nil
         isSticky = false
         allItems = []
+        otherDesktopWindows = [:]
     }
 }
