@@ -25,6 +25,8 @@ enum CyclePanelAction {
 enum CyclePanelItem {
     case window(Window)
     case action(CyclePanelAction)
+    /// A running app with no window on this desktop (other-apps switcher only).
+    case app(Application)
 }
 
 @MainActor
@@ -45,6 +47,29 @@ final class CyclePanelState: ObservableObject {
     @Published var details: [CGWindowID: WindowDetail] = [:]
     /// Set while asking "press 3 again to open" for an app that is not running.
     @Published var launchPrompt: LaunchPrompt?
+
+    // MARK: Other-apps switcher (⌥ + `)
+
+    enum Mode { case application, otherApps }
+
+    @Published var mode: Mode = .application
+    /// What has been typed to narrow the list down.
+    @Published var filterText = ""
+    /// Numbers with no app in the current profile, for the "give it a number" hint.
+    @Published var freeNumbers: [Int] = []
+    /// Short confirmation shown in the footer, e.g. "WhatsApp is now on ⌥ 4".
+    @Published var footerMessage: String?
+    /// The keys held to open the switcher, e.g. "⌥".
+    @Published var modifierSymbols = ""
+    /// Once the user types, letting go of the modifier no longer switches; Return does.
+    @Published var isSticky = false
+    /// Everything the other-apps switcher found, before filtering.
+    private(set) var allItems: [CyclePanelItem] = []
+
+    /// The panel is sized for every item found, so it doesn't jump while filtering.
+    var layoutItemCount: Int {
+        mode == .otherApps ? max(1, allItems.count) : items.count
+    }
 
     struct LaunchPrompt: Equatable {
         /// The number key that opened the switcher, e.g. "3".
@@ -97,6 +122,12 @@ final class CyclePanelState: ObservableObject {
     
     func setApplication(_ application: Application) {
         self.applicationTitle = application.title
+        mode = .application
+        filterText = ""
+        isSticky = false
+        footerMessage = nil
+        freeNumbers = []
+        allItems = []
         
         let windows = application.getWindows()
         if windows.isEmpty {
@@ -179,6 +210,108 @@ final class CyclePanelState: ObservableObject {
         thumbnails[windowID] = image
     }
     
+    /// Fills the panel with the windows of apps that have no number.
+    func setOtherApps(_ result: OtherApps.Result) {
+        mode = .otherApps
+        applicationTitle = "Other apps"
+        applicationIcon = nil
+        launchPrompt = nil
+        filterText = ""
+        isSticky = false
+        footerMessage = nil
+
+        allItems = result.windows.map(CyclePanelItem.window) + result.windowlessApps.map(CyclePanelItem.app)
+        items = allItems
+        selectedIndex = 0
+
+        showsPreviews = !result.windows.isEmpty
+            && WindowThumbnailer.isEnabledInPreferences
+            && WindowThumbnailer.hasPermission
+
+        var thumbnails: [CGWindowID: NSImage] = [:]
+        if showsPreviews {
+            for window in result.windows {
+                if let cached = WindowThumbnailer.shared.cachedThumbnail(for: window.id) {
+                    thumbnails[window.id] = cached
+                }
+            }
+        }
+        self.thumbnails = thumbnails
+
+        // Shared title starts are trimmed per app, not across apps.
+        var titles: [CGWindowID: String] = [:]
+        let byApp = Dictionary(grouping: result.windows) { $0.application.pid ?? 0 }
+        for (_, appWindows) in byApp {
+            let trimmed = Self.displayTitles(for: appWindows.map(\.title))
+            for (window, title) in zip(appWindows, trimmed) { titles[window.id] = title }
+        }
+        displayTitles = titles
+        details = [:]
+    }
+
+    /// Re-applies `filterText`, keeping the selection on the same item when it survives.
+    func applyFilter() {
+        let previous = currentItem.map(Self.identity)
+        let query = filterText.lowercased().trimmingCharacters(in: .whitespaces)
+
+        if query.isEmpty {
+            items = allItems
+        } else {
+            let words = query.split(separator: " ").map(String.init)
+            items = allItems.filter { item in
+                let haystack = searchText(for: item).lowercased()
+                return words.allSatisfy { haystack.contains($0) }
+            }
+        }
+
+        if let previous, let index = items.firstIndex(where: { Self.identity($0) == previous }) {
+            selectedIndex = index
+        } else {
+            selectedIndex = 0
+        }
+    }
+
+    private func searchText(for item: CyclePanelItem) -> String {
+        switch item {
+        case .window(let window):
+            let title = displayTitles[window.id] ?? window.title
+            return [window.application.title, title, details[window.id]?.text ?? ""].joined(separator: " ")
+        case .app(let app):
+            return app.title
+        case .action(let action):
+            return action.title
+        }
+    }
+
+    private static func identity(_ item: CyclePanelItem) -> String {
+        switch item {
+        case .window(let window): return "w\(window.id)"
+        case .app(let app): return "a\(app.pid ?? 0)"
+        case .action(let action): return "x\(action.title)"
+        }
+    }
+
+    /// The app behind the selected card.
+    var currentApplication: Application? {
+        switch currentItem {
+        case .window(let window): return window.application
+        case .app(let app): return app
+        default: return nil
+        }
+    }
+
+    func movePrevious() {
+        guard !items.isEmpty else { return }
+        selectedIndex = (selectedIndex - 1 + items.count) % items.count
+    }
+
+    /// Moves by `step` items without wrapping (grid up/down by a row).
+    func move(by step: Int) {
+        guard !items.isEmpty else { return }
+        let target = selectedIndex + step
+        if items.indices.contains(target) { selectedIndex = target }
+    }
+
     func cycleNext() {
         guard !items.isEmpty else { return }
         selectedIndex = (selectedIndex + 1) % items.count
@@ -194,5 +327,11 @@ final class CyclePanelState: ObservableObject {
         displayTitles = [:]
         details = [:]
         launchPrompt = nil
+        mode = .application
+        filterText = ""
+        freeNumbers = []
+        footerMessage = nil
+        isSticky = false
+        allItems = []
     }
 }

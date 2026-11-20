@@ -341,6 +341,19 @@ enum WindowDetailsDebug {
 
     @MainActor
     private static func run(_ command: String) {
+        if command == "others" {
+            let bound = Set((AppDelegate.profileManager.currentProfile?.bindings ?? []).compactMap { $0 })
+            let started = CFAbsoluteTimeGetCurrent()
+            let result = OtherApps.collect(excludingBundleIdentifiers: bound)
+            let ms = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
+            var out = "bound: \(bound.sorted())\ncollect took \(ms) ms\n\nwindows (front first):\n"
+            for window in result.windows { out += "  [\(window.id)] \(window.application.title): \(window.title)\n" }
+            out += "\napps with no window here:\n"
+            for app in result.windowlessApps { out += "  \(app.title) (\(app.bundleIdentifier ?? "?"))\n" }
+            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Reef")
+            try? out.write(to: dir.appendingPathComponent("others.txt"), atomically: true, encoding: .utf8)
+            return
+        }
         if command.hasPrefix("tree ") {
             tree(bundleIdentifier: String(command.dropFirst(5)))
             return

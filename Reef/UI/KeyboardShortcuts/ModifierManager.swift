@@ -61,6 +61,11 @@ final class ModifierManager: ObservableObject {
         // Initialize shortcuts with saved modifiers on first launch
         updateShortcuts()
     }
+
+    /// Re-registers every shortcut, e.g. after the other-apps switcher is turned on or off.
+    func refreshShortcuts() {
+        updateShortcuts()
+    }
     
     var bindModifiers: NSEvent.ModifierFlags {
         var modifiers: NSEvent.ModifierFlags = []
@@ -154,6 +159,12 @@ final class ModifierManager: ObservableObject {
         bindEnabledStored = bindIsEnabled
         activateEnabledStored = activateIsEnabled
         profileEnabledStored = profileIsEnabled
+
+        // ⌥ + ` (the activate modifiers + the key left of 1): apps without a number.
+        KeyboardShortcuts.setShortcut(
+            activateIsEnabled && OtherApps.isEnabled ? .init(.backtick, modifiers: activateMods) : nil,
+            for: .activateOtherApps
+        )
 
         for number in 0...9 {
             setNumberShortcut(number, enabled: bindIsEnabled, modifiers: bindMods,

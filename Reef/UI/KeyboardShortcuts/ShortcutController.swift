@@ -34,6 +34,9 @@ extension KeyboardShortcuts.Name {
         Self("profile\(number)")
     }
 
+    /// Switcher for apps without a number: the activate modifiers + `.
+    static let activateOtherApps = Self("activateOtherApps")
+
     // Numeric-keypad counterparts registered alongside the main-row shortcuts.
     static let bindKeypadShortcuts: [KeyboardShortcuts.Name] = (0...9).map { number in
         Self("bindKeypad\(number)")
@@ -56,11 +59,16 @@ final class ShortcutController {
     init(_ cycleController: CyclePanelController, _ profileManager: ProfileManager) {
         self.cycleController = cycleController
         self.profileManager = profileManager
+        cycleController.profileManager = profileManager
         
         setupShortcuts()
     }
     
     private func setupShortcuts() {
+        KeyboardShortcuts.onKeyDown(for: .activateOtherApps) {
+            self.handleOtherApps()
+        }
+
         for number in 0...9 {
             // Register both the main-row and numeric-keypad shortcut for each
             // number so either physical key triggers the same action.
@@ -84,7 +92,21 @@ final class ShortcutController {
         }
     }
     
+    private func handleOtherApps() {
+        if cycleController.panel.isVisible, cycleController.isShowingOtherApps {
+            cycleController.cycleNext()
+        } else {
+            cycleController.showOtherApps()
+        }
+    }
+
     private func handleBind(number: Int) {
+        // In the other-apps switcher the bind shortcut binds the selected app (replacing any).
+        if cycleController.panel.isVisible, cycleController.isShowingOtherApps {
+            cycleController.bindSelectedApp(to: number, replacing: true)
+            return
+        }
+
         guard let application = Application.getFrontApplication() else {
             NSSound.beep()
             return
@@ -101,6 +123,12 @@ final class ShortcutController {
     }
     
     private func handleActivate(number: Int) {
+        // In the other-apps switcher, a free number gives the selected app that number.
+        if cycleController.panel.isVisible, cycleController.isShowingOtherApps,
+           cycleController.bindSelectedApp(to: number, replacing: false) {
+            return
+        }
+
         guard let binding = profileManager.application(for: number) else {
             NSSound.beep()
             return

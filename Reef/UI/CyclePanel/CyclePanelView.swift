@@ -82,6 +82,10 @@ struct CyclePanelLayout {
     let itemCount: Int
     /// "Slack isn't open — press 3 again" instead of the window list.
     var showsLaunchPrompt = false
+    /// The other-apps switcher's bottom line (filter, "give it a number" hint).
+    var showsFooter = false
+
+    static let footerHeight: CGFloat = 34
 
     static let launchPromptHeight: CGFloat = 118
 
@@ -188,7 +192,7 @@ struct CyclePanelLayout {
             body = Self.gridPadding + Self.spotlightSize.height + 8 + Self.spotlightCaptionHeight
                 + 10 + stripCellSize.height + Self.gridPadding
         }
-        return Self.headerHeight + Self.dividerHeight + body
+        return Self.headerHeight + Self.dividerHeight + body + (showsFooter ? Self.footerHeight : 0)
     }
 }
 
@@ -203,8 +207,9 @@ struct CyclePanelView: View {
             style: SwitcherStyle(rawValue: styleRawValue) ?? .grid,
             showsDetails: !state.windows.isEmpty,
             showsPreviews: state.showsPreviews,
-            itemCount: state.items.count,
-            showsLaunchPrompt: state.launchPrompt != nil
+            itemCount: state.layoutItemCount,
+            showsLaunchPrompt: state.launchPrompt != nil,
+            showsFooter: state.mode == .otherApps
         )
     }
 
@@ -228,6 +233,12 @@ struct CyclePanelView: View {
                 )
                 .frame(height: CyclePanelLayout.launchPromptHeight)
             } else {
+            if state.items.isEmpty, state.mode == .otherApps {
+                Text("No open app matches “\(state.filterText)”")
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+            } else {
             switch layout.effectiveStyle {
             case .listWithPreview: listWithPreview
             case .largeThumbnails: windowList(thumbnailSize: CyclePanelLayout.largeRowThumbnailSize)
@@ -236,8 +247,16 @@ struct CyclePanelView: View {
             case nil: windowList(thumbnailSize: nil)
             }
             }
+            }
+
+            if state.mode == .otherApps {
+                Spacer(minLength: 0)
+                OtherAppsFooter(state: state)
+                    .frame(height: CyclePanelLayout.footerHeight)
+            }
         }
         .frame(width: layout.panelWidth, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
     }
 
@@ -249,12 +268,39 @@ struct CyclePanelView: View {
             return state.displayTitles[window.id] ?? window.title
         case .action(let action):
             return action.title
+        case .app(let app):
+            return app.title
         }
     }
 
     private func itemDetail(_ item: CyclePanelItem) -> String? {
-        guard case let .window(window) = item else { return nil }
-        return state.details[window.id]?.text
+        switch item {
+        case .window(let window):
+            let detail = state.details[window.id]?.text
+            // Several apps are mixed together here, so name the app.
+            guard state.mode == .otherApps else { return detail }
+            return [window.application.title, detail].compactMap { $0 }.joined(separator: " · ")
+        case .app:
+            return "No window on this desktop"
+        case .action:
+            return nil
+        }
+    }
+
+    /// Shown while a picture loads, or instead of one.
+    private func itemIcon(_ item: CyclePanelItem) -> NSImage? {
+        guard state.mode == .otherApps else { return state.applicationIcon }
+        switch item {
+        case .window(let window): return window.application.runningApplication?.icon
+        case .app(let app): return app.runningApplication?.icon
+        case .action: return nil
+        }
+    }
+
+    /// The small app icon on a card's corner, when windows of several apps are mixed.
+    private func itemBadge(_ item: CyclePanelItem) -> NSImage? {
+        guard state.mode == .otherApps, case let .window(window) = item else { return nil }
+        return window.application.runningApplication?.icon
     }
 
     private func itemImage(_ item: CyclePanelItem) -> NSImage? {
@@ -282,7 +328,7 @@ struct CyclePanelView: View {
             if let item = state.currentItem {
                 SelectedWindowPreview(
                     image: itemImage(item),
-                    fallbackIcon: state.applicationIcon,
+                    fallbackIcon: itemIcon(item),
                     title: itemTitle(item),
                     detail: itemDetail(item)
                 )
@@ -301,8 +347,8 @@ struct CyclePanelView: View {
                     isSelected: index == state.selectedIndex,
                     height: layout.rowHeight,
                     preview: thumbnailSize.flatMap { size in
-                        guard case .window = item else { return nil }
-                        return CyclePanelRow.Preview(image: itemImage(item), fallbackIcon: state.applicationIcon, size: size)
+                        if case .action = item { return nil }
+                        return CyclePanelRow.Preview(image: itemImage(item), fallbackIcon: itemIcon(item), size: size, badge: itemBadge(item))
                     }
                 )
                 .id(index)
@@ -337,7 +383,8 @@ struct CyclePanelView: View {
             ForEach(indexedItems, id: \.offset) { index, item in
                 WindowCard(
                     image: itemImage(item),
-                    fallbackIcon: state.applicationIcon,
+                    fallbackIcon: itemIcon(item),
+                    badge: itemBadge(item),
                     title: itemTitle(item),
                     detail: itemDetail(item),
                     isSelected: index == state.selectedIndex
@@ -371,7 +418,7 @@ struct CyclePanelView: View {
                 VStack(alignment: .center, spacing: 8) {
                     WindowThumbnailView(
                         image: itemImage(item),
-                        fallbackIcon: state.applicationIcon,
+                        fallbackIcon: itemIcon(item),
                         isSelected: false,
                         size: CyclePanelLayout.spotlightSize,
                         iconSize: 64
@@ -401,7 +448,8 @@ struct CyclePanelView: View {
                         ForEach(indexedItems, id: \.offset) { index, item in
                             StripCell(
                                 image: itemImage(item),
-                                fallbackIcon: state.applicationIcon,
+                                fallbackIcon: itemIcon(item),
+                                badge: itemBadge(item),
                                 title: itemTitle(item),
                                 isSelected: index == state.selectedIndex
                             )
@@ -492,6 +540,7 @@ struct CyclePanelRow: View {
         let image: NSImage?
         let fallbackIcon: NSImage?
         var size: CGSize = CyclePanelLayout.rowThumbnailSize
+        var badge: NSImage? = nil
     }
 
     let title: String
@@ -513,7 +562,8 @@ struct CyclePanelRow: View {
                     fallbackIcon: preview.fallbackIcon,
                     isSelected: isSelected,
                     size: preview.size,
-                    iconSize: preview.size.height * 0.45
+                    iconSize: preview.size.height * 0.45,
+                    badge: preview.badge
                 )
             }
 
@@ -584,6 +634,7 @@ struct SelectedWindowPreview: View {
 struct WindowCard: View {
     let image: NSImage?
     let fallbackIcon: NSImage?
+    var badge: NSImage? = nil
     let title: String
     let detail: String?
     let isSelected: Bool
@@ -595,7 +646,8 @@ struct WindowCard: View {
                 fallbackIcon: fallbackIcon,
                 isSelected: isSelected,
                 size: CyclePanelLayout.cardThumbnailSize,
-                iconSize: 48
+                iconSize: 48,
+                badge: badge
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -626,6 +678,7 @@ struct WindowCard: View {
 struct StripCell: View {
     let image: NSImage?
     let fallbackIcon: NSImage?
+    var badge: NSImage? = nil
     let title: String
     let isSelected: Bool
 
@@ -636,7 +689,8 @@ struct StripCell: View {
                 fallbackIcon: fallbackIcon,
                 isSelected: isSelected,
                 size: CyclePanelLayout.stripThumbnailSize,
-                iconSize: 28
+                iconSize: 28,
+                badge: badge
             )
             Text(title)
                 .font(.system(size: 11))
@@ -659,6 +713,8 @@ struct WindowThumbnailView: View {
     let isSelected: Bool
     let size: CGSize
     var iconSize: CGFloat = 24
+    /// A small app icon in the bottom-left corner.
+    var badge: NSImage? = nil
 
     var body: some View {
         ZStack {
@@ -688,5 +744,55 @@ struct WindowThumbnailView: View {
                     lineWidth: isSelected ? 2 : 1
                 )
         )
+        .overlay(alignment: .bottomLeading) {
+            // Only over a picture: without one, the big app icon already says which app.
+            if let badge, image != nil {
+                let side = min(28, max(16, size.height * 0.2))
+                Image(nsImage: badge)
+                    .resizable()
+                    .frame(width: side, height: side)
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                    .offset(x: 6, y: -6)
+            }
+        }
+    }
+}
+
+/// Bottom line of the other-apps switcher: what's been typed, and how to give an app a number.
+struct OtherAppsFooter: View {
+    @ObservedObject var state: CyclePanelState
+
+    private var hint: String {
+        if let message = state.footerMessage { return message }
+        guard !state.freeNumbers.isEmpty else { return "Every number is taken" }
+        let numbers = state.freeNumbers.prefix(4).map(String.init).joined(separator: " ")
+        let more = state.freeNumbers.count > 4 ? " …" : ""
+        return "\(state.modifierSymbols) + a free number (\(numbers)\(more)) gives it a number"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.white.opacity(0.5))
+            if state.filterText.isEmpty {
+                Text("Type to search")
+                    .foregroundColor(.white.opacity(0.4))
+            } else {
+                Text(state.filterText)
+                    .foregroundColor(.white)
+                + Text("  Return to switch")
+                    .foregroundColor(.white.opacity(0.4))
+            }
+
+            Spacer(minLength: 12)
+
+            Text(hint)
+                .foregroundColor(state.footerMessage == nil ? .white.opacity(0.5) : .green.opacity(0.9))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 16)
+        .background(Color.white.opacity(0.04))
     }
 }

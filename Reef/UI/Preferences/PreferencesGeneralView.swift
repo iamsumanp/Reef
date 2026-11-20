@@ -19,6 +19,7 @@ struct PreferencesGeneralView: View {
     @AppStorage(WindowThumbnailer.preferenceKey) private var showWindowPreviews = true
     @AppStorage(SwitcherStyle.preferenceKey) private var switcherStyle = SwitcherStyle.grid.rawValue
     @AppStorage(CyclePanelState.confirmLaunchKey) private var confirmBeforeLaunch = true
+    @AppStorage(OtherApps.preferenceKey) private var otherAppsSwitcher = true
     
     @State private var hasAccessibilityPermission = AXIsProcessTrusted()
     @State private var hasScreenRecordingPermission = WindowThumbnailer.hasPermission
@@ -28,8 +29,13 @@ struct PreferencesGeneralView: View {
         showWindowPreviews && !hasScreenRecordingPermission
     }
 
+    private var otherAppsLabel: String {
+        let keys = AppDelegate.modifierManager?.activateModifierSymbols ?? ""
+        return "Switch to apps without a number with \(keys.isEmpty ? "" : keys + " ")`"
+    }
+
     private var formHeight: CGFloat {
-        var height: CGFloat = showWindowPreviews ? 336 : 300
+        var height: CGFloat = showWindowPreviews ? 372 : 336
         if !hasAccessibilityPermission { height += 70 }
         if needsScreenRecordingPermission { height += 70 }
         return height
@@ -110,6 +116,11 @@ struct PreferencesGeneralView: View {
                 }
 
                 Toggle("Ask before opening apps that aren't running", isOn: $confirmBeforeLaunch)
+
+                Toggle(otherAppsLabel, isOn: $otherAppsSwitcher)
+                    .onChange(of: otherAppsSwitcher) {
+                        AppDelegate.modifierManager?.refreshShortcuts()
+                    }
 
                 Picker("Instant switch:", selection: $instantSwitch) {
                     Text("Never").tag("never")

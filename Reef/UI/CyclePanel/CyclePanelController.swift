@@ -20,6 +20,11 @@ final class CyclePanelController: NSObject {
     private var currentApplication: Application?
     private var panelAnchorCenter: CGPoint?
     private var targetScreen: NSScreen?
+    /// Set by ShortcutController; used to find apps without a number and to bind them.
+    var profileManager: ProfileManager?
+    private var footerMessageTask: Task<Void, Never>?
+
+    var isShowingOtherApps: Bool { state.mode == .otherApps }
 
     private static func screenUnderMouse() -> NSScreen? {
         let mouse = NSEvent.mouseLocation
@@ -34,8 +39,9 @@ final class CyclePanelController: NSObject {
             style: SwitcherStyle.current,
             showsDetails: !state.windows.isEmpty,
             showsPreviews: state.showsPreviews,
-            itemCount: state.items.count,
-            showsLaunchPrompt: state.launchPrompt != nil
+            itemCount: state.layoutItemCount,
+            showsLaunchPrompt: state.launchPrompt != nil,
+            showsFooter: state.mode == .otherApps
         )
     }
     private var panelContentWidth: CGFloat { layout.panelWidth }
@@ -45,7 +51,7 @@ final class CyclePanelController: NSObject {
 
     private var minPanelContentHeight: CGFloat {
         // Minimum height that still matches the layout for one row.
-        CyclePanelLayout(style: layout.style, showsDetails: layout.showsDetails, showsPreviews: layout.showsPreviews, itemCount: 1, showsLaunchPrompt: layout.showsLaunchPrompt).contentHeight
+        CyclePanelLayout(style: layout.style, showsDetails: layout.showsDetails, showsPreviews: layout.showsPreviews, itemCount: 1, showsLaunchPrompt: layout.showsLaunchPrompt, showsFooter: layout.showsFooter).contentHeight
     }
     
     init(modifierManager: ModifierManager) {
@@ -96,6 +102,13 @@ final class CyclePanelController: NSObject {
             state.selectedIndex = startIndex
         }
         
+        presentPanel()
+        loadThumbnails()
+        loadDetails()
+    }
+
+    /// Shows the panel (or resizes it if it is already up) in the middle of the screen.
+    private func presentPanel() {
         if !panel.isVisible {
             // The exact middle of the screen the mouse is on. (NSWindow.center() sits
             // the window in the upper third, and always on the main screen.)
@@ -118,9 +131,118 @@ final class CyclePanelController: NSObject {
             }
             updatePanelSize()
         }
+    }
 
+    // MARK: - Other apps (⌥ + `)
+
+    /// Shows the windows of every running app that has no number in the current profile.
+    func showOtherApps() {
+        let profile = profileManager?.currentProfile
+        let bound = Set((profile?.bindings ?? []).compactMap { $0 })
+        // Read before Reef comes to the front: the window the user is in right now.
+        let frontWindowID = Window.getFrontWindow()?.id
+
+        let result = OtherApps.collect(excludingBundleIdentifiers: bound)
+        guard !result.isEmpty else {
+            NSSound.beep()
+            return
+        }
+
+        currentApplication = nil
+        state.setOtherApps(result)
+        state.modifierSymbols = modifierManager.activateModifierSymbols
+        state.freeNumbers = (0...9).filter { profile?.bundleIdentifier(for: $0) == nil }
+
+        // Like ⌘-Tab: the first press goes to the window before the current one.
+        if state.items.count > 1, case let .window(first) = state.items[0], first.id == frontWindowID {
+            state.selectedIndex = 1
+        }
+
+        presentPanel()
         loadThumbnails()
         loadDetails()
+    }
+
+    /// Gives the selected card's app a number. Without `replacing`, only free numbers are
+    /// used, so a slip of the finger never moves another app off its number.
+    @discardableResult
+    func bindSelectedApp(to number: Int, replacing: Bool) -> Bool {
+        guard isShowingOtherApps,
+              let profileManager,
+              let app = state.currentApplication,
+              let bundleIdentifier = app.bundleIdentifier
+        else { return false }
+
+        if !replacing, profileManager.bundleIdentifier(for: number) != nil {
+            return false
+        }
+
+        profileManager.bind(bundleIdentifier: bundleIdentifier, to: number)
+        state.freeNumbers = (0...9).filter { profileManager.bundleIdentifier(for: $0) == nil }
+        showFooterMessage("\(app.title) is now on \(state.modifierSymbols) \(number)")
+        return true
+    }
+
+    private func showFooterMessage(_ message: String) {
+        footerMessageTask?.cancel()
+        state.footerMessage = message
+        footerMessageTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.state.footerMessage = nil
+        }
+    }
+
+    /// Typing, arrows, Return and Backspace in the other-apps switcher. Returns true when used.
+    private func handleOtherAppsKey(_ event: NSEvent) -> Bool {
+        switch event.keyCode {
+        case 36, 76: // Return, Enter
+            activateSelectedWindow(force: true)
+            return true
+        case 123: // ←
+            state.movePrevious()
+            return true
+        case 124: // →
+            state.cycleNext()
+            return true
+        case 126: // ↑ one row up in the grid, else one item
+            state.move(by: -(layout.effectiveStyle == .grid ? layout.gridColumns : 1))
+            return true
+        case 125: // ↓
+            state.move(by: layout.effectiveStyle == .grid ? layout.gridColumns : 1)
+            return true
+        case 48: // Tab / ⇧Tab
+            event.modifierFlags.contains(.shift) ? state.movePrevious() : state.cycleNext()
+            return true
+        case 51: // Backspace
+            guard !state.filterText.isEmpty else { return true }
+            state.filterText.removeLast()
+            state.applyFilter()
+            return true
+        default:
+            break
+        }
+
+        // ⌥ changes what letters type (⌥w = ∑), so read the key itself.
+        guard let characters = event.charactersIgnoringModifiers?.lowercased(),
+              let character = characters.first,
+              characters.count == 1
+        else { return false }
+
+        // Once Reef is sticky (the user let go of ⌥), plain digits give a number.
+        if state.isSticky, let digit = character.wholeNumberValue {
+            if !bindSelectedApp(to: digit, replacing: false) { NSSound.beep() }
+            return true
+        }
+
+        guard character.isLetter || character.isNumber || character == " " || character == "." || character == "-" else {
+            return false
+        }
+
+        state.filterText.append(character)
+        state.isSticky = true
+        state.applyFilter()
+        return true
     }
 
     /// Looks up each window's website / folder / screen in the background; rows get
@@ -132,18 +254,30 @@ final class CyclePanelController: NSObject {
         let windows = state.windows
         guard !windows.isEmpty else { return }
 
-        let ids = windows.map(\.id)
-        nonisolated(unsafe) let elements = windows.map(\.element)
-        let bundleIdentifier = currentApplication?.bundleIdentifier
+        // One lookup per app: the rules differ (browser, Finder, documents).
+        let groups = Dictionary(grouping: windows) { $0.application.bundleIdentifier ?? "pid\($0.application.pid ?? 0)" }
+            .map { _, appWindows in
+                (bundleIdentifier: appWindows[0].application.bundleIdentifier,
+                 ids: appWindows.map(\.id),
+                 elements: appWindows.map(\.element))
+            }
+        nonisolated(unsafe) let work = groups
 
         detailsTask = Task { [weak self] in
             let facts = await Task.detached(priority: .userInitiated) {
-                WindowDetails.facts(for: elements, bundleIdentifier: bundleIdentifier)
+                work.map { WindowDetails.facts(for: $0.elements, bundleIdentifier: $0.bundleIdentifier) }
             }.value
             guard !Task.isCancelled, let self else { return }
 
-            let details = WindowDetails.details(for: facts, bundleIdentifier: bundleIdentifier)
-            self.state.setDetails(Dictionary(zip(ids, details), uniquingKeysWith: { first, _ in first }))
+            var all: [CGWindowID: WindowDetail] = [:]
+            for (group, groupFacts) in zip(work, facts) {
+                let details = WindowDetails.details(for: groupFacts, bundleIdentifier: group.bundleIdentifier)
+                for (id, detail) in zip(group.ids, details) { all[id] = detail }
+            }
+            self.state.setDetails(all)
+            if self.state.mode == .otherApps, !self.state.filterText.isEmpty {
+                self.state.applyFilter()   // websites and folders are searchable too
+            }
         }
     }
 
@@ -221,8 +355,11 @@ final class CyclePanelController: NSObject {
         return currentApplication.title == application.title
     }
     
-    // Called when user releases a configured switcher modifier.
-    func activateSelectedWindow() {
+    // Called when user releases a configured switcher modifier (or presses Return).
+    func activateSelectedWindow(force: Bool = false) {
+        // After typing a filter, letting go of the modifier doesn't switch; Return does.
+        if state.isSticky, !force { return }
+
         guard let item = state.currentItem else {
             hideSwitcher()
             return
@@ -232,6 +369,11 @@ final class CyclePanelController: NSObject {
         case .window(let window):
             window.focus()
             hideSwitcher()
+        case .app(let app):
+            hideSwitcher()
+            Task { @MainActor in
+                if !(await app.performNoWindowAction()) { NSSound.beep() }
+            }
         case .action:
             // Letting go without confirming cancels the launch.
             if state.launchPrompt != nil {
@@ -261,6 +403,8 @@ final class CyclePanelController: NSObject {
         thumbnailTask = nil
         detailsTask?.cancel()
         detailsTask = nil
+        footerMessageTask?.cancel()
+        footerMessageTask = nil
         removeFlagsMonitor()
         removeKeyDownMonitor()
         panel.orderOut(nil)
@@ -324,6 +468,14 @@ final class CyclePanelController: NSObject {
                     self.hideSwitcher()
                 }
                 return nil
+            }
+
+            if self.panel.isVisible, self.isShowingOtherApps {
+                let handled = MainActor.assumeIsolated { self.handleOtherAppsKey(event) }
+                if handled {
+                    MainActor.assumeIsolated { self.updatePanelSize() }
+                    return nil
+                }
             }
 
             return event
