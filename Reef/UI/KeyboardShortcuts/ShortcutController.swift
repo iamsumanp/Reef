@@ -62,6 +62,12 @@ final class ShortcutController {
         cycleController.profileManager = profileManager
         
         setupShortcuts()
+        #if REEF_DEBUG
+        NotificationCenter.default.addObserver(forName: .reefDebugPress, object: nil, queue: .main) { [weak self] note in
+            guard let number = note.object as? Int else { return }
+            MainActor.assumeIsolated { self?.handleActivate(number: number) }
+        }
+        #endif
     }
     
     private func setupShortcuts() {
@@ -123,6 +129,7 @@ final class ShortcutController {
     }
     
     private func handleActivate(number: Int) {
+        ActivityLog.log("key \(number) pressed (panel \(cycleController.panel.isVisible ? "up" : "down"), front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))")
         // In the other-apps switcher, a free number gives the selected app that number.
         if cycleController.panel.isVisible, cycleController.isShowingOtherApps,
            cycleController.bindSelectedApp(to: number, replacing: false) {

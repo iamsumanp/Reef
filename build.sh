@@ -83,6 +83,7 @@ cat > $APP/Contents/Info.plist <<EOF
 	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key><string>14.6</string>
 	<key>LSUIElement</key><true/>
+	<key>NSAppSleepDisabled</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>
 </plist>

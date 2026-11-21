@@ -324,6 +324,10 @@ private extension CGRect {
 #if REEF_DEBUG
 /// Debug only: `reefctl dump` writes what each app reports about its windows to
 /// ~/Library/Logs/Reef/windows.txt, so the details can be checked without the UI.
+extension Notification.Name {
+    static let reefDebugPress = Notification.Name("reefDebugPress")
+}
+
 enum WindowDetailsDebug {
     static let notificationName = Notification.Name("io.github.iamsumanp.reef.debug")
 
@@ -348,10 +352,38 @@ enum WindowDetailsDebug {
             let ms = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
             var out = "bound: \(bound.sorted())\ncollect took \(ms) ms\n\nwindows (front first):\n"
             for window in result.windows {
-                out += "  [\(window.id)] \(window.application.title): \(window.title)\(window.offscreenPlacement.map { "  (\($0.label))" } ?? "")\n"
+                out += "  [\(window.id)] \(window.application.title): \(window.title)\(window.offscreenPlacement.map { "  (\($0.label ?? "this desktop, AX silent"))" } ?? "")\n"
             }
             let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Reef")
             try? out.write(to: dir.appendingPathComponent("others.txt"), atomically: true, encoding: .utf8)
+            return
+        }
+        if command.hasPrefix("probe ") {
+            // One app by bundle id, bound or not.
+            let bundleID = String(command.dropFirst(6))
+            guard let app = Application(bundleIdentifier: bundleID), app.pid != nil else { return }
+            let started = CFAbsoluteTimeGetCurrent()
+            let windows = app.getWindows()
+            ActivityLog.log("probe \(app.title): \(windows.count) windows, \(ActivityLog.ms(since: started)) ms total")
+            for window in windows {
+                ActivityLog.log("    [\(window.id)] \(window.title)  \(window.offscreenPlacement.map { "\($0)" } ?? "via AX")")
+            }
+            return
+        }
+        if command.hasPrefix("press ") {
+            // As if the activate shortcut for this number were pressed (and let go at once).
+            NotificationCenter.default.post(name: .reefDebugPress, object: Int(command.dropFirst(6)))
+            return
+        }
+        if command == "probe" {
+            // Time the window lookup of every bound app, as a key press would.
+            ActivityLog.log("probe")
+            for bundleID in (AppDelegate.profileManager.currentProfile?.bindings ?? []).compactMap({ $0 }) {
+                guard let app = Application(bundleIdentifier: bundleID), app.pid != nil else { continue }
+                let started = CFAbsoluteTimeGetCurrent()
+                let count = app.getWindows().count
+                ActivityLog.log("  \(app.title): \(count) windows, \(ActivityLog.ms(since: started)) ms total")
+            }
             return
         }
         if command.hasPrefix("tree ") {
@@ -378,7 +410,7 @@ enum WindowDetailsDebug {
             out += "== \(app.title) (\(app.bundleIdentifier ?? "?")) — \(windows.count) windows, \(ms) ms\n"
             for (index, window) in windows.enumerated() {
                 let f = facts[index]
-                out += "  [\(window.id)] \"\(window.title)\"\(window.offscreenPlacement.map { "  (\($0.label))" } ?? "")\n"
+                out += "  [\(window.id)] \"\(window.title)\"\(window.offscreenPlacement.map { "  (\($0.label ?? "this desktop, AX silent"))" } ?? "")\n"
                 out += "      shown as: \"\(titles[index])\" / \(details[index].text ?? "—")\n"
                 out += "      page=\(f.pageTitle ?? "-") url=\(f.url?.absoluteString ?? "-") document=\(f.documentURL?.absoluteString ?? "-") min=\(f.isMinimized) frame=\(f.frame.map { "\($0)" } ?? "-")\n"
                 let names = (window.element.attributeNames ?? []).joined(separator: ",")

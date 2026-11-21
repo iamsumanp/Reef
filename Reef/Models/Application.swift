@@ -218,21 +218,29 @@ class Application {
     }
 
     func getAXWindows() -> [AXUIElement] {
+        axWindows() ?? []
+    }
+
+    /// nil when the app didn't answer (asleep, busy, or past the messaging timeout).
+    private func axWindows() -> [AXUIElement]? {
         guard let element = element else {
             return []
         }
         
         // NOTE: Only returns windows in current Desktop (but multiple monitors does work)
-        guard let windows: [AXUIElement] = element.getAttributeValue(.windows) else {
-            return []
-        }
-        
+        let started = CFAbsoluteTimeGetCurrent()
+        var value: AnyObject?
+        let result = AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value)
+        let windows = value as? [AXUIElement] ?? []
+        ActivityLog.log("  \(title): AX windows → \(result == .success ? "\(windows.count)" : "error \(result.rawValue)") in \(ActivityLog.ms(since: started)) ms")
+        // .noValue: a running app with no windows at all, which is an answer.
+        guard result == .success || result == .noValue else { return nil }
         return windows
     }
     
     func getWindows() -> [Window] {
-        let axWindows = self.getAXWindows()
-        var windows = axWindows.map { axWindow in
+        let axWindows = self.axWindows()
+        var windows = (axWindows ?? []).map { axWindow in
             Window(axWindow, self)
         }
         
@@ -246,9 +254,14 @@ class Application {
         // Accessibility only lists windows in the spaces on screen. Add the rest
         // (full-screen apps, other desktops) from the window server.
         if let pid {
+            let started = CFAbsoluteTimeGetCurrent()
             let known = Set(windows.map(\.id))
-            windows += Spaces.offscreenWindows(pid: pid, excluding: known)
-                .map { Window(offscreen: $0, self) }
+            // If Accessibility didn't answer, the window server still knows every window,
+            // and can focus them by id.
+            let offscreen = Spaces.offscreenWindows(
+                pid: pid, excluding: known, includingOnScreen: axWindows == nil)
+            windows += offscreen.map { Window(offscreen: $0, self) }
+            ActivityLog.log("  \(title): \(offscreen.count) windows in other spaces, in \(ActivityLog.ms(since: started)) ms")
         }
         
         return windows

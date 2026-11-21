@@ -73,6 +73,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         #if REEF_DEBUG
         WindowDetailsDebug.install()
         #endif
+        ActivityLog.startHeartbeat()
+
+        // Cap how long one app that doesn't answer can hold up a switch (the default is
+        // 6 s). Windows it doesn't list in time come from the window server instead.
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

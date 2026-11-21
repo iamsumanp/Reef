@@ -19,12 +19,15 @@ enum Spaces {
         case fullScreen
         case otherDesktop
         case minimized
+        /// On screen now, found here only because Accessibility didn't answer.
+        case thisDesktop
 
-        var label: String {
+        var label: String? {
             switch self {
             case .fullScreen: return "Full screen"
             case .otherDesktop: return "Other desktop"
             case .minimized: return "Minimized"
+            case .thisDesktop: return nil
             }
         }
     }
@@ -37,8 +40,13 @@ enum Spaces {
     }
 
     /// The app's titled, real-sized windows that are not in a space on screen now.
-    /// `known` are the window ids Accessibility already returned.
-    static func offscreenWindows(pid: pid_t, excluding known: Set<CGWindowID>) -> [OffscreenWindow] {
+    /// `known` are the window ids Accessibility already returned. With `includingOnScreen`
+    /// (Accessibility didn't answer: the app is asleep or busy), on-screen windows too.
+    static func offscreenWindows(
+        pid: pid_t,
+        excluding known: Set<CGWindowID>,
+        includingOnScreen: Bool = false
+    ) -> [OffscreenWindow] {
         guard let info = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
                 as? [[String: Any]] else { return [] }
 
@@ -58,11 +66,14 @@ enum Spaces {
             else { continue }
 
             let spaces = Set(spacesFor(window: id, connection: connection))
-            // In a space on screen: Accessibility left it out on purpose (tool windows etc.).
-            guard spaces.isDisjoint(with: visible) else { continue }
 
             let placement: Placement
-            if spaces.isEmpty {
+            if !spaces.isDisjoint(with: visible) {
+                // In a space on screen: Accessibility left it out on purpose (tool windows
+                // etc.), unless it didn't answer at all.
+                guard includingOnScreen else { continue }
+                placement = .thisDesktop
+            } else if spaces.isEmpty {
                 placement = .minimized
             } else if !spaces.isDisjoint(with: fullScreen) {
                 placement = .fullScreen

@@ -84,7 +84,9 @@ final class CyclePanelController: NSObject {
     // Called when user presses the configured window-switching shortcut.
     func showSwitcher(for application: Application, startIndex: Int = 0, number: Int? = nil) {
         currentApplication = application
+        let started = CFAbsoluteTimeGetCurrent()
         state.setApplication(application)
+        ActivityLog.log("  switcher for \(application.title): \(state.items.count) items, built in \(ActivityLog.ms(since: started)) ms")
 
         // An app that is not running is only launched after its number is pressed again.
         if CyclePanelState.confirmsLaunch, let number,
@@ -104,10 +106,29 @@ final class CyclePanelController: NSObject {
         if startIndex > 0 && startIndex < state.items.count {
             state.selectedIndex = startIndex
         }
+
+        // A launch prompt waits for a second press, so it shows even after letting go.
+        if state.launchPrompt == nil, switchIfModifierAlreadyReleased() { return }
         
         presentPanel()
         loadThumbnails()
         loadDetails()
+    }
+
+    /// A slow window lookup (an app that sat idle for hours and has to wake up) can
+    /// take longer than the key press. The modifier was then let go before the panel
+    /// and its release monitor existed, so the panel would sit there waiting for a
+    /// release that already happened. Check the keys as they are now instead.
+    private func switchIfModifierAlreadyReleased() -> Bool {
+        guard !panel.isVisible else { return false }
+        let required = modifierManager.activateModifiers.intersection(Self.releaseModifierMask)
+        guard !required.isEmpty,
+              !required.isSubset(of: NSEvent.modifierFlags.intersection(Self.releaseModifierMask))
+        else { return false }
+
+        ActivityLog.log("  modifier already released before the panel appeared; switching")
+        activateSelectedWindow()
+        return true
     }
 
     /// Shows the panel (or resizes it if it is already up) in the middle of the screen.
@@ -160,6 +181,8 @@ final class CyclePanelController: NSObject {
         if state.items.count > 1, case let .window(first) = state.items[0], first.id == frontWindowID {
             state.selectedIndex = 1
         }
+
+        if switchIfModifierAlreadyReleased() { return }
 
         presentPanel()
         loadThumbnails()
@@ -449,6 +472,7 @@ final class CyclePanelController: NSObject {
 
         let pressedModifiers = modifierFlags.intersection(Self.releaseModifierMask)
         if !requiredModifiers.isSubset(of: pressedModifiers) {
+            ActivityLog.log("  modifier released")
             activateSelectedWindow()
         }
     }
