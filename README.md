@@ -8,8 +8,9 @@ The macOS window manager that gives every app its own Alt-Tab.
 
 [How we made Reef (YouTube)](https://youtu.be/niRCi5zJvHU)
 
-> **About this fork:** adds window previews to the switcher, so windows with the same or
-> similar titles are easy to tell apart. See [Fork additions](#fork-additions).
+> **About this fork:** adds window previews to the switcher, a switcher for apps without a
+> number, windows in every space (including full-screen apps), and a prompt before opening apps
+> that aren't running. See [Fork additions](#fork-additions).
 
 ## Key Features
 
@@ -52,6 +53,7 @@ To switch between apps and windows:
 In this way, Reef gives every app its own 'Alt-Tab'.
 
 Note that window switching is scoped to your current [macOS space](https://support.apple.com/en-ca/guide/mac-help/mh14112/mac).
+(This fork lists windows in every space; see [Fork additions](#fork-additions).)
 
 ### Customization
 
@@ -98,9 +100,31 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   left out, long titles wrap to two lines, and Dia's shortened window titles are replaced with
   the full page title from its address bar.
 - **Centred on your screen.** The switcher opens in the middle of the screen the mouse is on.
+- **Windows in every space.** Windows on other desktops, in full-screen apps, minimized or on
+  another display (including Sidecar) are listed too, labelled "Other desktop", "Full screen" or
+  "Minimized", and switching to one moves you to its space. Switching works from inside a
+  full-screen app as well.
+- **Apps without a number: <kbd>modifier</kbd> + <kbd>`</kbd>.** Opens the same card grid with
+  the windows of every running app that has no number, frontmost first. Keep pressing
+  <kbd>`</kbd> or use the arrow keys to move, or type to filter by app or window name (then
+  <kbd>Return</kbd> switches). Pressing <kbd>modifier</kbd> + a free number while it's open gives
+  the selected app that number. Apps with no window anywhere (running in the background after
+  their last window closed) are left out, as in Mission Control. Turn it off under
+  **Preferences → General**.
+- **Confirm before opening an app.** Pressing the number of an app that isn't running shows
+  "*App* isn't open — press the number again to open it"; letting go of the modifier or
+  pressing <kbd>Esc</kbd> cancels. Turn it off under **Preferences → General**.
+- **Only real windows.** Picture-in-picture videos (such as a browser's YouTube popup), palettes
+  and other windows that float above normal ones are left out, so they don't count as a second
+  window or stop the number key from switching straight to the app.
+- **Reliable after long idle.** Letting go of the modifier before a slow app answered used to
+  leave the panel waiting; Reef now switches right away. An app that doesn't answer is given up
+  on after 1 second and its windows come from the window server instead, and Reef opts out of
+  App Nap.
 
 Previews need **Screen Recording** (System Settings → Privacy & Security → Screen & System Audio
 Recording). Without it, the switcher keeps the original text-only look, with the second line.
+Window names in other spaces need it too.
 
 ### Building without Xcode
 
@@ -108,6 +132,11 @@ Recording). Without it, the switcher keeps the original text-only look, with the
 Tools (`Package.swift` mirrors the Xcode target). It uses its own bundle id and no update feed, so
 it can sit next to the official app. Put a signing identity in a gitignored `build.local.sh`
 (`REEF_SIGN_KEYCHAIN`, `REEF_SIGN_PASSWORD`, `REEF_SIGN_NAME`) to keep permissions across rebuilds.
+
+With `REEF_DEBUG=1`, the build logs every switch (key press, window lookup, focus, picture
+timing) to `~/Library/Logs/Reef/activity.log`, and `reefctl` (build it with
+`swiftc Tools/reefctl.swift -o build/reefctl`) sends debug commands to the running app: `dump`, `others`, `probe`, `probe <bundle id>`, `tree <bundle id>`, `thumbs`,
+`press <n>`, `otherapps`, `release`, `focus <window id>`.
 
 
 ## FAQ
