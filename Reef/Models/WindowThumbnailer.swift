@@ -100,10 +100,13 @@ final class WindowThumbnailer {
         fitting pixelSize: CGSize,
         deliver: @escaping @Sendable (CGWindowID, CGImage) async -> Void
     ) async {
+        let started = CFAbsoluteTimeGetCurrent()
         // Off-screen windows are included so minimized ones can still be matched.
         guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else {
+            ActivityLog.log("  pictures: window list failed after \(ActivityLog.ms(since: started)) ms")
             return
         }
+        ActivityLog.log("  pictures: window list in \(ActivityLog.ms(since: started)) ms")
 
         let windows = content.windows.filter { windowIDs.contains($0.windowID) }
 
@@ -115,6 +118,7 @@ final class WindowThumbnailer {
                 }
             }
         }
+        ActivityLog.log("  pictures: \(windows.count) captured, all done in \(ActivityLog.ms(since: started)) ms")
     }
 
     private nonisolated static func captureImage(of window: SCWindow, fitting pixelSize: CGSize) async -> CGImage? {

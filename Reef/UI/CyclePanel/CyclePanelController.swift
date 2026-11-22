@@ -166,7 +166,9 @@ final class CyclePanelController: NSObject {
         // Read before Reef comes to the front: the window the user is in right now.
         let frontWindowID = Window.getFrontWindow()?.id
 
+        let started = CFAbsoluteTimeGetCurrent()
         let result = OtherApps.collect(excludingBundleIdentifiers: bound)
+        ActivityLog.log("  other apps: \(result.windows.count) windows listed in \(ActivityLog.ms(since: started)) ms")
         guard !result.isEmpty else {
             NSSound.beep()
             return

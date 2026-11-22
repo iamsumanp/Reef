@@ -366,7 +366,21 @@ enum WindowDetailsDebug {
             let windows = app.getWindows()
             ActivityLog.log("probe \(app.title): \(windows.count) windows, \(ActivityLog.ms(since: started)) ms total")
             for window in windows {
-                ActivityLog.log("    [\(window.id)] \(window.title)  \(window.offscreenPlacement.map { "\($0)" } ?? "via AX")")
+                let subrole = window.element.value(kAXSubroleAttribute) as? String ?? "-"
+                let role = window.element.value(kAXRoleAttribute) as? String ?? "-"
+                let level = (CGWindowListCopyWindowInfo([.optionIncludingWindow], window.id) as? [[String: Any]])?.first?[kCGWindowLayer as String] as? Int ?? -1
+                ActivityLog.log("    [\(window.id)] \(window.title)  \(window.offscreenPlacement.map { "\($0)" } ?? "via AX")  role=\(role) subrole=\(subrole) layer=\(level) frame=\(window.element.frame.map { "\(Int($0.width))x\(Int($0.height))" } ?? "-")")
+            }
+            return
+        }
+        if command == "thumbs" {
+            // Capture every ⌥ ` window's picture, as the switcher would, and log the time.
+            let bound = Set((AppDelegate.profileManager.currentProfile?.bindings ?? []).compactMap { $0 })
+            let ids = OtherApps.collect(excludingBundleIdentifiers: bound).windows.map(\.id)
+            ActivityLog.log("thumbs for \(ids.count) windows")
+            Task {
+                await WindowThumbnailer.shared.captureThumbnails(
+                    for: ids, fitting: CyclePanelLayout.captureSize, scale: 2) { _, _ in }
             }
             return
         }

@@ -105,6 +105,7 @@ final class ShortcutController {
     }
     
     private func handleOtherApps() {
+        ActivityLog.log("key ` pressed (panel \(cycleController.panel.isVisible ? "up" : "down"), front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))")
         if cycleController.panel.isVisible, cycleController.isShowingOtherApps {
             cycleController.cycleNext()
         } else {

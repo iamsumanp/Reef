@@ -243,6 +243,7 @@ class Application {
         var windows = (axWindows ?? []).map { axWindow in
             Window(axWindow, self)
         }
+        windows = Self.droppingFloatingWindows(windows)
         
         // Finder can expose a trailing generic "Finder" window that is not useful for switching.
         if bundleIdentifier == "com.apple.finder",
@@ -267,6 +268,27 @@ class Application {
         return windows
     }
     
+    /// Picture-in-picture videos (Dia's YouTube popup), palettes and other windows that
+    /// float above normal ones aren't something to switch to; real windows sit on
+    /// the normal level, 0.
+    private static func droppingFloatingWindows(_ windows: [Window]) -> [Window] {
+        let ids = Set(windows.compactMap(\.cgWindowID))
+        guard !ids.isEmpty,
+              let info = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]]
+        else { return windows }
+
+        var floating: Set<CGWindowID> = []
+        for entry in info {
+            if let id = entry[kCGWindowNumber as String] as? CGWindowID, ids.contains(id),
+               let layer = entry[kCGWindowLayer as String] as? Int, layer != 0 {
+                floating.insert(id)
+            }
+        }
+        guard !floating.isEmpty else { return windows }
+        ActivityLog.log("  left out floating windows \(floating.sorted())")
+        return windows.filter { !floating.contains($0.id) }
+    }
+
     func listAvailableAttributes() -> [String] {
         guard let element = element else {
             return []
