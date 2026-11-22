@@ -370,6 +370,19 @@ enum WindowDetailsDebug {
             }
             return
         }
+        if command.hasPrefix("focus ") {
+            // focus <window id>: bring that window forward the way an off-screen one is.
+            guard let id = CGWindowID(command.dropFirst(6)),
+                  let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
+                  let pid = info[kCGWindowOwnerPID as String] as? pid_t else { return }
+            let ok = Spaces.focus(windowID: id, pid: pid)
+            ActivityLog.log("focus \(id) (pid \(pid)) → \(ok)")
+            return
+        }
+        if command == "otherapps" || command == "release" {
+            NotificationCenter.default.post(name: .reefDebugPress, object: command)
+            return
+        }
         if command.hasPrefix("press ") {
             // As if the activate shortcut for this number were pressed (and let go at once).
             NotificationCenter.default.post(name: .reefDebugPress, object: Int(command.dropFirst(6)))

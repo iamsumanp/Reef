@@ -95,7 +95,39 @@ enum Spaces {
         // kCPSUserGenerated: as if the user clicked the window.
         guard _SLPSSetFrontProcessWithOptions(&psn, windowID, 0x200) == .success else { return false }
         makeKey(windowID: windowID, psn: &psn)
+        // Chromium apps act on the event above, but AppKit apps (Passwords, Notes,
+        // Activity Monitor) only move to the window's space when it is raised.
+        if let element = accessibilityElement(windowID: windowID, pid: pid) {
+            AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        }
         return true
+    }
+
+    /// The Accessibility element of a window in another space. The app's window list
+    /// leaves those out, but every element can be addressed by a remote token
+    /// (pid + "coco" + element id), so walk the ids until one is this window. AltTab
+    /// does the same.
+    static func accessibilityElement(windowID: CGWindowID, pid: pid_t) -> AXUIElement? {
+        let started = CFAbsoluteTimeGetCurrent()
+        var token = Data(count: 20)
+        token.replaceSubrange(0..<4, with: withUnsafeBytes(of: pid) { Data($0) })
+        token.replaceSubrange(4..<8, with: withUnsafeBytes(of: Int32(0)) { Data($0) })
+        token.replaceSubrange(8..<12, with: withUnsafeBytes(of: Int32(0x636f_636f)) { Data($0) })
+
+        for elementID: UInt64 in 0..<1000 {
+            // An app that doesn't answer would make each try wait; give up instead.
+            if CFAbsoluteTimeGetCurrent() - started > 0.3 { break }
+            token.replaceSubrange(12..<20, with: withUnsafeBytes(of: elementID) { Data($0) })
+            guard let element = _AXUIElementCreateWithRemoteToken(token as CFData)?.takeRetainedValue() else { continue }
+            AXUIElementSetMessagingTimeout(element, 0.1)
+            var id = CGWindowID(0)
+            if _AXUIElementGetWindow(element, &id) == .success, id == windowID {
+                ActivityLog.log("  found AX element for [\(windowID)] at id \(elementID) in \(ActivityLog.ms(since: started)) ms")
+                return element
+            }
+        }
+        ActivityLog.log("  no AX element for [\(windowID)] after \(ActivityLog.ms(since: started)) ms")
+        return nil
     }
 
     /// Two synthetic "make this window key" event records (the layout yabai uses).
@@ -194,6 +226,9 @@ private func SLPSPostEventRecordTo(
 ) -> CGError {
     postEventRecord?(psn, bytes) ?? .failure
 }
+
+@_silgen_name("_AXUIElementCreateWithRemoteToken")
+private func _AXUIElementCreateWithRemoteToken(_ token: CFData) -> Unmanaged<AXUIElement>?
 
 @_silgen_name("GetProcessForPID")
 private func GetProcessForPID(_ pid: pid_t, _ psn: UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus

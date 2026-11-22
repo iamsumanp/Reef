@@ -64,8 +64,14 @@ final class ShortcutController {
         setupShortcuts()
         #if REEF_DEBUG
         NotificationCenter.default.addObserver(forName: .reefDebugPress, object: nil, queue: .main) { [weak self] note in
-            guard let number = note.object as? Int else { return }
-            MainActor.assumeIsolated { self?.handleActivate(number: number) }
+            MainActor.assumeIsolated {
+                switch note.object {
+                case let number as Int: self?.handleActivate(number: number)
+                case "otherapps" as String: self?.handleOtherApps()
+                case "release" as String: self?.cycleController.activateSelectedWindow()
+                default: break
+                }
+            }
         }
         #endif
     }
