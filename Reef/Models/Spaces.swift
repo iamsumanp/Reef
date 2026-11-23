@@ -100,9 +100,13 @@ enum Spaces {
         guard _SLPSSetFrontProcessWithOptions(&psn, windowID, 0x200) == .success else { return false }
         makeKey(windowID: windowID, psn: &psn)
         // Chromium apps act on the event above, but AppKit apps (Passwords, Notes,
-        // Activity Monitor) only move to the window's space when it is raised.
-        if let element = accessibilityElement(windowID: windowID, pid: pid) {
-            AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        // Activity Monitor) only come forward when the window is raised. Finding its
+        // element waits on the app (25-55 ms for a browser that is just waking up), so it
+        // happens off the main thread, after the switch the user sees.
+        axQueue.async {
+            if let element = accessibilityElement(windowID: windowID, pid: pid) {
+                AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+            }
         }
         return true
     }
@@ -118,7 +122,10 @@ enum Spaces {
         token.replaceSubrange(4..<8, with: withUnsafeBytes(of: Int32(0)) { Data($0) })
         token.replaceSubrange(8..<12, with: withUnsafeBytes(of: Int32(0x636f_636f)) { Data($0) })
 
-        for elementID: UInt64 in 0..<1000 {
+        // A window keeps its element id, so the walk only happens the first time.
+        let cacheKey = "\(pid):\(windowID)"
+        let cached = elementIDs[cacheKey].map { [$0] } ?? []
+        for elementID: UInt64 in cached + Array(0..<1000) {
             // An app that doesn't answer would make each try wait; give up instead.
             if CFAbsoluteTimeGetCurrent() - started > 0.3 { break }
             token.replaceSubrange(12..<20, with: withUnsafeBytes(of: elementID) { Data($0) })
@@ -126,6 +133,7 @@ enum Spaces {
             AXUIElementSetMessagingTimeout(element, 0.1)
             var id = CGWindowID(0)
             if _AXUIElementGetWindow(element, &id) == .success, id == windowID {
+                elementIDs[cacheKey] = elementID
                 ActivityLog.log("  found AX element for [\(windowID)] at id \(elementID) in \(ActivityLog.ms(since: started)) ms")
                 return element
             }
@@ -133,6 +141,12 @@ enum Spaces {
         ActivityLog.log("  no AX element for [\(windowID)] after \(ActivityLog.ms(since: started)) ms")
         return nil
     }
+
+    /// Raises run here, one at a time, so a slow app never holds up a key press.
+    private static let axQueue = DispatchQueue(label: "Reef.raise", qos: .userInteractive)
+
+    /// Element id per "pid:window id", found by `accessibilityElement` (on `axQueue` only).
+    private static var elementIDs: [String: UInt64] = [:]
 
     /// Two synthetic "make this window key" event records (the layout yabai uses).
     private static func makeKey(windowID: CGWindowID, psn: inout ProcessSerialNumber) {

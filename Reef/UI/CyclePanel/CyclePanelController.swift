@@ -121,6 +121,8 @@ final class CyclePanelController: NSObject {
         // A launch prompt waits for a second press, so it shows even after letting go.
         if state.launchPrompt == nil, switchIfModifierAlreadyReleased() { return }
 
+        // Nothing moves until the modifier is let go: switching on the press would jump
+        // to the window before a second press could ask for the previews instead.
         showPanel(delayed: state.launchPrompt == nil)
     }
 
