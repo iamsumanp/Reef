@@ -53,6 +53,11 @@ class Window: Identifiable {
             if let pid = application.pid, let id = cgWindowID,
                Spaces.focus(windowID: id, pid: pid) {
                 ActivityLog.log("  focused \(application.title) [\(id)] by window server in \(ActivityLog.ms(since: started)) ms")
+                // A hung app can't put its own window on top, and nothing else may.
+                // Its space is shown by now; hide the apps covering the window instead.
+                if application.isUnresponsive {
+                    Spaces.uncover(windowID: id, pid: pid)
+                }
                 return
             }
             application.activate()

@@ -111,6 +111,48 @@ enum Spaces {
         return true
     }
 
+    /// Hides the apps whose windows cover `windowID` on its screen, as Hide Others (⌥⌘H)
+    /// would, for an app that doesn't answer and so can't bring the window forward itself.
+    /// A hidden app comes back the next time it is switched to.
+    static func uncover(windowID: CGWindowID, pid: pid_t, pass: Int = 1) {
+        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return }
+        func frame(_ entry: [String: Any]) -> CGRect? {
+            (entry[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) }
+        }
+        guard let index = info.firstIndex(where: { ($0[kCGWindowNumber as String] as? CGWindowID) == windowID }),
+              let target = frame(info[index]) else {
+            ActivityLog.log("  uncover: [\(windowID)] not on screen")
+            return
+        }
+
+        var covering = Set<pid_t>()
+        for entry in info[..<index] {
+            guard (entry[kCGWindowLayer as String] as? Int) == 0,
+                  let owner = entry[kCGWindowOwnerPID as String] as? pid_t,
+                  owner != pid, owner != getpid(),
+                  let rect = frame(entry) else { continue }
+            let overlap = rect.intersection(target)
+            // A sliver along an edge doesn't hide anything worth hiding an app for.
+            if !overlap.isNull, overlap.width * overlap.height > target.width * target.height * 0.1 {
+                covering.insert(owner)
+            }
+        }
+        // hide() often reports false although the app does hide, so it isn't checked.
+        let names = covering.compactMap { owner -> String? in
+            guard let app = NSRunningApplication(processIdentifier: owner) else { return nil }
+            app.hide()
+            return app.localizedName
+        }
+        ActivityLog.log("  uncover [\(windowID)] pass \(pass): hid \(names.isEmpty ? "nothing" : names.joined(separator: ", "))")
+        // Hiding the app in front makes macOS bring the next one forward (the hung app
+        // can't take its place), so look again once that has happened.
+        guard !names.isEmpty, pass < 4 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            uncover(windowID: windowID, pid: pid, pass: pass + 1)
+        }
+    }
+
     /// The Accessibility element of a window in another space. The app's window list
     /// leaves those out, but every element can be addressed by a remote token
     /// (pid + "coco" + element id), so walk the ids until one is this window. AltTab

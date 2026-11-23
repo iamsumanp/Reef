@@ -229,15 +229,34 @@ class Application {
         
         // NOTE: Only returns windows in current Desktop (but multiple monitors does work)
         let started = CFAbsoluteTimeGetCurrent()
+        // An app that just failed to answer is asked briefly, so every press of its
+        // number doesn't stall a whole second; its windows come from the window server.
+        AXUIElementSetMessagingTimeout(element, isUnresponsive ? 0.15 : 0)
         var value: AnyObject?
         let result = AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &value)
         let windows = value as? [AXUIElement] ?? []
         ActivityLog.log("  \(title): AX windows → \(result == .success ? "\(windows.count)" : "error \(result.rawValue)") in \(ActivityLog.ms(since: started)) ms")
+        if let pid {
+            if result == .cannotComplete {
+                Self.unresponsiveSince[pid] = Self.unresponsiveSince[pid] ?? CFAbsoluteTimeGetCurrent()
+            } else {
+                Self.unresponsiveSince[pid] = nil
+            }
+        }
         // .noValue: a running app with no windows at all, which is an answer.
         guard result == .success || result == .noValue else { return nil }
         return windows
     }
     
+    /// Apps whose last Accessibility request timed out (hung, or busy), by pid.
+    private static var unresponsiveSince: [pid_t: CFAbsoluteTime] = [:]
+
+    /// The app didn't answer the last time it was asked for its windows.
+    var isUnresponsive: Bool {
+        guard let pid else { return false }
+        return Self.unresponsiveSince[pid] != nil
+    }
+
     func getWindows() -> [Window] {
         let axWindows = self.axWindows()
         var windows = (axWindows ?? []).map { axWindow in

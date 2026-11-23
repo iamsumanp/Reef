@@ -397,6 +397,14 @@ enum WindowDetailsDebug {
             NotificationCenter.default.post(name: .reefDebugPress, object: command)
             return
         }
+        if command.hasPrefix("switchto ") {
+            // switchto <bundle id>: the window a number key would pick, focused the same way.
+            guard let app = Application(bundleIdentifier: String(command.dropFirst(9))),
+                  let window = app.getWindows().first else { return }
+            ActivityLog.log("switchto \(app.title) [\(window.id)]")
+            window.focus()
+            return
+        }
         if command.hasPrefix("keys ") {
             // keys <key code> <hold ms> [presses]: real ⌥ + key events, ⌥ let go after the hold,
             // logging whether the panel appeared. Tests tap vs hold.

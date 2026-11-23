@@ -129,6 +129,10 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
 - **Only real windows.** Picture-in-picture videos (such as a browser's YouTube popup), palettes
   and other windows that float above normal ones are left out, so they don't count as a second
   window or stop the number key from switching straight to the app.
+- **Reaches frozen apps too.** An app that has stopped responding can't bring its own window
+  forward, and macOS lets no other app do it. Reef switches to the window's space and hides the
+  apps covering it (as Hide Others would) so it's in view; they come back when you switch to
+  them. After the first try Reef stops waiting a full second on that app.
 - **Reliable after long idle.** Letting go of the modifier before a slow app answered used to
   leave the panel waiting; Reef now switches right away. An app that doesn't answer is given up
   on after 1 second and its windows come from the window server instead, and Reef opts out of
