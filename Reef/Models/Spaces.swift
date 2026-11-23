@@ -92,6 +92,10 @@ enum Spaces {
         var psn = ProcessSerialNumber()
         guard GetProcessForPID(pid, &psn) == noErr else { return false }
 
+        // Show the window's space first without the slide, so the window server has
+        // nothing left to animate.
+        InstantSpaceSwitch.reveal(windowID: windowID)
+
         // kCPSUserGenerated: as if the user clicked the window.
         guard _SLPSSetFrontProcessWithOptions(&psn, windowID, 0x200) == .success else { return false }
         makeKey(windowID: windowID, psn: &psn)
