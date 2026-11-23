@@ -16,6 +16,7 @@ struct PreferencesGeneralView: View {
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("defaultNumberOrder") private var defaultNumberOrder = "rightHanded"
     @AppStorage("instantSwitch") private var instantSwitch = "never"
+    @AppStorage("switcherPanelDelay") private var switcherPanelDelay = 0.2
     @AppStorage(WindowThumbnailer.preferenceKey) private var showWindowPreviews = true
     @AppStorage(SwitcherStyle.preferenceKey) private var switcherStyle = SwitcherStyle.grid.rawValue
     @AppStorage(CyclePanelState.confirmLaunchKey) private var confirmBeforeLaunch = true
@@ -127,6 +128,14 @@ struct PreferencesGeneralView: View {
                     Text("When only one window open").tag("whenOnlyOneWindowOpen")
                 }
                 .pickerStyle(.menu)
+
+                Picker("Show the switcher:", selection: $switcherPanelDelay) {
+                    Text("Right away").tag(0.0)
+                    Text("After a short hold").tag(0.2)
+                    Text("After a longer hold").tag(0.4)
+                }
+                .pickerStyle(.menu)
+                .help("A quick tap goes straight to the window you were last on; keep holding the modifier, or press the number again, to see every window.")
 
                 Picker("Default number order:", selection: $defaultNumberOrder) {
                     Text("Right handed (0, 9, ..., 1)").tag("rightHanded")

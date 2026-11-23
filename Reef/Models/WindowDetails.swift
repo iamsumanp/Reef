@@ -397,6 +397,40 @@ enum WindowDetailsDebug {
             NotificationCenter.default.post(name: .reefDebugPress, object: command)
             return
         }
+        if command.hasPrefix("keys ") {
+            // keys <key code> <hold ms> [presses]: real ⌥ + key events, ⌥ let go after the hold,
+            // logging whether the panel appeared. Tests tap vs hold.
+            let parts = command.split(separator: " ")
+            guard parts.count >= 3, let code = CGKeyCode(parts[1]), let hold = Double(parts[2]) else { return }
+            let presses = parts.count > 3 ? Int(parts[3]) ?? 1 : 1
+            let source = CGEventSource(stateID: .hidSystemState)
+            func post(_ key: CGKeyCode, _ down: Bool, _ flags: CGEventFlags) {
+                let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down)
+                event?.flags = flags
+                event?.post(tap: .cghidEventTap)
+            }
+            post(58, true, .maskAlternate)
+            for press in 0..<presses {
+                // Further presses come as a quick double tap would, 80 ms apart.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08 * Double(press)) {
+                    post(code, true, .maskAlternate)
+                    post(code, false, .maskAlternate)
+                }
+            }
+            let started = CFAbsoluteTimeGetCurrent()
+            var sawPanel = false
+            func check() {
+                if NSApp.windows.contains(where: { $0 is CyclePanel && $0.isVisible }) { sawPanel = true }
+                if CFAbsoluteTimeGetCurrent() - started < hold / 1000 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01, execute: check)
+                } else {
+                    post(58, false, [])
+                    ActivityLog.log("keys \(code) held \(Int(hold)) ms → panel seen: \(sawPanel)")
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01, execute: check)
+            return
+        }
         if command.hasPrefix("press ") {
             // As if the activate shortcut for this number were pressed (and let go at once).
             NotificationCenter.default.post(name: .reefDebugPress, object: Int(command.dropFirst(6)))

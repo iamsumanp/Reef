@@ -104,6 +104,18 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   another display (including Sidecar) are listed too, labelled "Other desktop", "Full screen" or
   "Minimized", and switching to one moves you to its space. Switching works from inside a
   full-screen app as well.
+- **Tap to switch, hold to choose.** A quick <kbd>modifier</kbd> + number goes straight to the
+  app's last window without the switcher ever appearing. Keep holding the modifier, or press the
+  number twice, and the switcher with every window shows up, still on that last window; each
+  press after that moves to the next one. Works the same for
+  <kbd>modifier</kbd> + <kbd>`</kbd>. Set the hold under **Preferences → General → Show the
+  switcher** ("Right away" brings back the old behaviour).
+- **No slide between spaces.** Switching to a window in another desktop or full-screen app
+  jumps there instantly instead of playing the macOS slide (Reduce motion only turns it into a
+  fade). Reef posts the Dock a synthetic swipe too fast to animate, the technique from
+  [InstantSpaceSwitcher](https://github.com/jurplel/InstantSpaceSwitcher) (MIT), so no SIP
+  change is needed. It applies to spaces on the display under the pointer; turn it off with
+  `defaults write io.github.iamsumanp.reef instantSpaceSwitch -bool false`.
 - **Apps without a number: <kbd>modifier</kbd> + <kbd>`</kbd>.** Opens the same card grid with
   the windows of every running app that has no number, frontmost first. Keep pressing
   <kbd>`</kbd> or use the arrow keys to move, or type to filter by app or window name (then

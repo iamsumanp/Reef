@@ -106,7 +106,7 @@ final class ShortcutController {
     
     private func handleOtherApps() {
         ActivityLog.log("key ` pressed (panel \(cycleController.panel.isVisible ? "up" : "down"), front: \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))")
-        if cycleController.panel.isVisible, cycleController.isShowingOtherApps {
+        if cycleController.isActive, cycleController.isShowingOtherApps {
             cycleController.cycleNext()
         } else {
             cycleController.showOtherApps()
@@ -148,8 +148,8 @@ final class ShortcutController {
             return
         }
         
-        // If panel is already visible, cycle if same app; otherwise switch to the newly requested app.
-        if cycleController.panel.isVisible {
+        // If panel is already visible (or about to be), cycle if same app; otherwise switch to the newly requested app.
+        if cycleController.isActive {
             if cycleController.isShowingSwitcher(for: binding) {
                 cycleController.cycleNext()
             } else {

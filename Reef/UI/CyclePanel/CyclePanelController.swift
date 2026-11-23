@@ -23,6 +23,17 @@ final class CyclePanelController: NSObject {
     /// Set by ShortcutController; used to find apps without a number and to bind them.
     var profileManager: ProfileManager?
     private var footerMessageTask: Task<Void, Never>?
+    /// Waiting to show the panel: a quick tap switches without it ever appearing.
+    private var pendingPanel: DispatchWorkItem?
+
+    /// Up, or about to be: a press of the same number cycles instead of starting over.
+    var isActive: Bool { panel.isVisible || pendingPanel != nil }
+
+    /// How long the modifier has to stay down before the panel appears, from Preferences.
+    /// 0 shows it right away, as the original Reef did.
+    private static var panelDelay: TimeInterval {
+        UserDefaults.standard.object(forKey: "switcherPanelDelay") as? Double ?? 0.2
+    }
 
     var isShowingOtherApps: Bool { state.mode == .otherApps }
 
@@ -109,10 +120,34 @@ final class CyclePanelController: NSObject {
 
         // A launch prompt waits for a second press, so it shows even after letting go.
         if state.launchPrompt == nil, switchIfModifierAlreadyReleased() { return }
-        
-        presentPanel()
-        loadThumbnails()
-        loadDetails()
+
+        showPanel(delayed: state.launchPrompt == nil)
+    }
+
+    /// Shows the panel, or after a short hold: letting go of the modifier before then
+    /// switches to the selected window with no panel at all.
+    private func showPanel(delayed: Bool) {
+        pendingPanel?.cancel()
+        pendingPanel = nil
+        let delay = Self.panelDelay
+        guard delayed, delay > 0, !panel.isVisible else {
+            presentPanel()
+            loadThumbnails()
+            loadDetails()
+            return
+        }
+
+        installFlagsMonitor()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.pendingPanel != nil else { return }
+            self.pendingPanel = nil
+            ActivityLog.log("  held; showing the panel")
+            self.presentPanel()
+            self.loadThumbnails()
+            self.loadDetails()
+        }
+        pendingPanel = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// A slow window lookup (an app that sat idle for hours and has to wake up) can
@@ -186,9 +221,7 @@ final class CyclePanelController: NSObject {
 
         if switchIfModifierAlreadyReleased() { return }
 
-        presentPanel()
-        loadThumbnails()
-        loadDetails()
+        showPanel(delayed: true)
     }
 
     /// Gives the selected card's app a number. Without `replacing`, only free numbers are
@@ -374,6 +407,12 @@ final class CyclePanelController: NSObject {
             activateSelectedWindow()
             return
         }
+        // A second press before the panel appeared only brings it up, still on the window
+        // last used: pressing twice to open the switcher is a habit, not a step forward.
+        if pendingPanel != nil {
+            showPanel(delayed: false)
+            return
+        }
         state.cycleNext()
     }
     
@@ -433,6 +472,8 @@ final class CyclePanelController: NSObject {
     }
     
     private func hideSwitcher() {
+        pendingPanel?.cancel()
+        pendingPanel = nil
         thumbnailTask?.cancel()
         thumbnailTask = nil
         detailsTask?.cancel()
@@ -467,14 +508,14 @@ final class CyclePanelController: NSObject {
     }
 
     private func activateIfSwitcherModifierWasReleased(_ modifierFlags: NSEvent.ModifierFlags) {
-        guard panel.isVisible else { return }
+        guard isActive else { return }
 
         let requiredModifiers = modifierManager.activateModifiers.intersection(Self.releaseModifierMask)
         guard !requiredModifiers.isEmpty else { return }
 
         let pressedModifiers = modifierFlags.intersection(Self.releaseModifierMask)
         if !requiredModifiers.isSubset(of: pressedModifiers) {
-            ActivityLog.log("  modifier released")
+            ActivityLog.log(panel.isVisible ? "  modifier released" : "  modifier released before the panel; switching")
             activateSelectedWindow()
         }
     }
