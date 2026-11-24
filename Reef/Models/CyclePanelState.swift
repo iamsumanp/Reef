@@ -81,8 +81,34 @@ final class CyclePanelState: ObservableObject {
     /// UserDefaults key: ask before launching an app that is not running (default on).
     static let confirmLaunchKey = "confirmBeforeLaunch"
 
-    static var confirmsLaunch: Bool {
-        UserDefaults.standard.object(forKey: confirmLaunchKey) as? Bool ?? true
+    static var confirmsLaunch: Bool { closedAppAction == .ask }
+
+    /// What a number does when its app isn't running.
+    enum ClosedAppAction: String, CaseIterable, Identifiable {
+        /// "Press the number again to open it."
+        case ask
+        /// Opens it straight away, as the original Reef did.
+        case open
+        /// Nothing at all: no prompt, no launch.
+        case nothing
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .ask: return "Ask before opening it"
+            case .open: return "Open it"
+            case .nothing: return "Do nothing"
+            }
+        }
+    }
+
+    static let closedAppActionKey = "closedAppAction"
+
+    /// Falls back on the older on/off setting: off meant open straight away.
+    static var closedAppAction: ClosedAppAction {
+        if let raw = UserDefaults.standard.string(forKey: closedAppActionKey),
+           let action = ClosedAppAction(rawValue: raw) { return action }
+        return (UserDefaults.standard.object(forKey: confirmLaunchKey) as? Bool ?? true) ? .ask : .open
     }
     
     var windows: [Window] {

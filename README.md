@@ -125,7 +125,8 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   **Preferences → General**.
 - **Confirm before opening an app.** Pressing the number of an app that isn't running shows
   "*App* isn't open — press the number again to open it"; letting go of the modifier or
-  pressing <kbd>Esc</kbd> cancels. Turn it off under **Preferences → General**.
+  pressing <kbd>Esc</kbd> cancels. **Preferences → General → When the app isn't running** can
+  also open it right away, or do nothing at all (no prompt, no launch).
 - **Only real windows.** Picture-in-picture videos (such as a browser's YouTube popup), palettes
   and other windows that float above normal ones are left out, so they don't count as a second
   window or stop the number key from switching straight to the app.

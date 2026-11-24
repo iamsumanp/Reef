@@ -19,7 +19,7 @@ struct PreferencesGeneralView: View {
     @AppStorage("switcherPanelDelay") private var switcherPanelDelay = 0.2
     @AppStorage(WindowThumbnailer.preferenceKey) private var showWindowPreviews = true
     @AppStorage(SwitcherStyle.preferenceKey) private var switcherStyle = SwitcherStyle.grid.rawValue
-    @AppStorage(CyclePanelState.confirmLaunchKey) private var confirmBeforeLaunch = true
+    @AppStorage(CyclePanelState.closedAppActionKey) private var closedAppAction = CyclePanelState.closedAppAction.rawValue
     @AppStorage(OtherApps.preferenceKey) private var otherAppsSwitcher = true
     
     @State private var hasAccessibilityPermission = AXIsProcessTrusted()
@@ -116,7 +116,12 @@ struct PreferencesGeneralView: View {
                     .pickerStyle(.menu)
                 }
 
-                Toggle("Ask before opening apps that aren't running", isOn: $confirmBeforeLaunch)
+                Picker("When the app isn't running:", selection: $closedAppAction) {
+                    ForEach(CyclePanelState.ClosedAppAction.allCases) { action in
+                        Text(action.title).tag(action.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
 
                 Toggle(otherAppsLabel, isOn: $otherAppsSwitcher)
                     .onChange(of: otherAppsSwitcher) {

@@ -99,6 +99,13 @@ final class CyclePanelController: NSObject {
         state.setApplication(application)
         ActivityLog.log("  switcher for \(application.title): \(state.items.count) items, built in \(ActivityLog.ms(since: started)) ms")
 
+        // An app that is not running: left alone when so chosen in Preferences.
+        if CyclePanelState.closedAppAction == .nothing, case .action(.launchApp) = state.currentItem {
+            ActivityLog.log("  \(application.title) isn't running; doing nothing (Preferences)")
+            hideSwitcher()
+            return
+        }
+
         // An app that is not running is only launched after its number is pressed again.
         if CyclePanelState.confirmsLaunch, let number,
            case .action(.launchApp) = state.currentItem {
