@@ -67,6 +67,14 @@ class Window: Identifiable {
 
         do {
             try self.element.performAction(.raise)
+            // Activating the whole app gives focus back to the window it last had, which
+            // on another display stays visible and keeps the keyboard (a browser window
+            // on a second monitor). Make this exact window the key one instead.
+            AXUIElementSetAttributeValue(self.element, kAXMainAttribute as CFString, kCFBooleanTrue)
+            if let pid = application.pid, let id = cgWindowID, Spaces.makeKey(windowID: id, pid: pid) {
+                ActivityLog.log("  raised \(application.title) [\(id)] and made it key in \(ActivityLog.ms(since: started)) ms")
+                return
+            }
             self.application.activate()
             ActivityLog.log("  raised \(application.title) [\(id)] in \(ActivityLog.ms(since: started)) ms")
         } catch {

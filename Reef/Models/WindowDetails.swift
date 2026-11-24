@@ -398,11 +398,19 @@ enum WindowDetailsDebug {
             return
         }
         if command.hasPrefix("switchto ") {
-            // switchto <bundle id>: the window a number key would pick, focused the same way.
-            guard let app = Application(bundleIdentifier: String(command.dropFirst(9))),
-                  let window = app.getWindows().first else { return }
+            // switchto <bundle id> [window id]: focus that window (or the one a number key
+            // would pick) the same way, then log which window the app says has focus.
+            let parts = command.split(separator: " ")
+            guard parts.count >= 2, let app = Application(bundleIdentifier: String(parts[1])) else { return }
+            let windows = app.getWindows()
+            let wanted = parts.count > 2 ? CGWindowID(parts[2]) : nil
+            guard let window = wanted.flatMap({ id in windows.first { $0.id == id } }) ?? windows.first else { return }
             ActivityLog.log("switchto \(app.title) [\(window.id)]")
             window.focus()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let focused = app.getFocusedWindow()?.id ?? 0
+                ActivityLog.log("  \(app.title) focused window now [\(focused)] \(focused == window.id ? "✓" : "✗ wanted \(window.id)")")
+            }
             return
         }
         if command.hasPrefix("keys ") {

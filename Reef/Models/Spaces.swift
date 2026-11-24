@@ -153,6 +153,16 @@ enum Spaces {
         }
     }
 
+    /// Brings the app forward with `windowID` as its key window, for a window already on
+    /// screen: no space switch and no Accessibility lookup. False if the window server refused.
+    static func makeKey(windowID: CGWindowID, pid: pid_t) -> Bool {
+        var psn = ProcessSerialNumber()
+        guard GetProcessForPID(pid, &psn) == noErr,
+              _SLPSSetFrontProcessWithOptions(&psn, windowID, 0x200) == .success else { return false }
+        makeKey(windowID: windowID, psn: &psn)
+        return true
+    }
+
     /// The Accessibility element of a window in another space. The app's window list
     /// leaves those out, but every element can be addressed by a remote token
     /// (pid + "coco" + element id), so walk the ids until one is this window. AltTab
