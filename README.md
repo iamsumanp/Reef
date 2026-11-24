@@ -107,7 +107,8 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
 - **Tap to switch, hold to choose.** A quick <kbd>modifier</kbd> + number goes straight to the
   app's last window without the switcher ever appearing. Keep holding the modifier, or press the
   number twice, and the switcher with every window shows up, still on that last window; each
-  press after that moves to the next one. Works the same for
+  press after that moves to the next one. Already in that app, a single press shows the switcher
+  at once, on its next window, since you're there to pick another one. Works the same for
   <kbd>modifier</kbd> + <kbd>`</kbd>. Set the hold under **Preferences → General → Show the
   switcher** ("Right away" brings back the old behaviour).
 - **No slide between spaces.** Switching to a window in another desktop or full-screen app

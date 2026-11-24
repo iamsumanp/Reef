@@ -130,7 +130,10 @@ final class CyclePanelController: NSObject {
 
         // Nothing moves until the modifier is let go: switching on the press would jump
         // to the window before a second press could ask for the previews instead.
-        showPanel(delayed: state.launchPrompt == nil)
+        // Already in this app (the caller starts on its second window): the press is for
+        // another of its windows, so the panel shows at once, as it always did.
+        let alreadyInApp = startIndex > 0 && state.windows.count > 1
+        showPanel(delayed: state.launchPrompt == nil && !alreadyInApp)
     }
 
     /// Shows the panel, or after a short hold: letting go of the modifier before then
