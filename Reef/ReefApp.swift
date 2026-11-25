@@ -66,6 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager = PreferencesController()
         
         NSApp.setActivationPolicy(.accessory)
+        LastUsedWindows.start()
 
         // Window previews in the switcher need Screen Recording; ask once.
         WindowThumbnailer.requestPermissionOnFirstLaunchIfNeeded()

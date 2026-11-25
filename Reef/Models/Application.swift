@@ -282,6 +282,9 @@ class Application {
                 pid: pid, excluding: known, includingOnScreen: axWindows == nil)
             windows += offscreen.map { Window(offscreen: $0, self) }
             ActivityLog.log("  \(title): \(offscreen.count) windows in other spaces, in \(ActivityLog.ms(since: started)) ms")
+            // The window the user was last working in comes first, wherever it is.
+            windows = LastUsedWindows.ordered(windows, pid: pid,
+                                              appIsActive: runningApplication?.isActive ?? false)
         }
         
         return windows

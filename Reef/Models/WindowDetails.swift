@@ -358,6 +358,20 @@ enum WindowDetailsDebug {
             try? out.write(to: dir.appendingPathComponent("others.txt"), atomically: true, encoding: .utf8)
             return
         }
+        if command.hasPrefix("remember ") {
+            // Note the app's focused window as if the user had just left it, then list
+            // its windows in the order a tap would use.
+            let bundleID = String(command.dropFirst(9))
+            guard let app = Application(bundleIdentifier: bundleID), let pid = app.pid else { return }
+            LastUsedWindows.record(pid: pid)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                ActivityLog.log("remember \(app.title): last used \(LastUsedWindows.window(for: pid).map { "\($0)" } ?? "none")")
+                for window in app.getWindows() {
+                    ActivityLog.log("    [\(window.id)] \(window.title)  \(window.offscreenPlacement.map { "\($0)" } ?? "via AX")")
+                }
+            }
+            return
+        }
         if command.hasPrefix("probe ") {
             // One app by bundle id, bound or not.
             let bundleID = String(command.dropFirst(6))

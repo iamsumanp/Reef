@@ -25,6 +25,14 @@ if [[ ! -x build/PreviewsMacrosStub || Tools/PreviewsMacrosStub.swift -nt build/
   swiftc -O Tools/PreviewsMacrosStub.swift -o build/PreviewsMacrosStub
 fi
 FLAGS=(-c release -Xswiftc -load-plugin-executable -Xswiftc "$PWD/build/PreviewsMacrosStub#PreviewsMacros")
+# The macOS 27 SDK turns SwiftUI's property wrappers (@State…) into macros from a
+# plugin only Xcode ships. Build against the macOS 26 SDK when it is installed; Swift 6.4
+# reads its interfaces when told their compiler version.
+PINNED_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk
+if [[ -d $PINNED_SDK ]]; then
+  export SDKROOT=$PINNED_SDK
+  FLAGS+=(-Xswiftc -Xfrontend -Xswiftc -interface-compiler-version -Xswiftc -Xfrontend -Xswiftc 6.3.2)
+fi
 # Debug hooks (Tools/reefctl.swift) only with REEF_DEBUG=1, e.g. in build.local.sh.
 [[ ${REEF_DEBUG:-0} == 1 ]] && FLAGS+=(-Xswiftc -DREEF_DEBUG) && echo "› debug build"
 
