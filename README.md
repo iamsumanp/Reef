@@ -111,6 +111,9 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   at once, starting on the window you're in. Works the same for
   <kbd>modifier</kbd> + <kbd>`</kbd>. Set the hold under **Preferences → General → Show the
   switcher** ("Right away" brings back the old behaviour).
+- **Mouse in the switcher.** While it's open, moving the pointer over a card selects it (letting
+  go of the modifier then switches there) and clicking a card switches at once. A switcher that
+  opens under a resting pointer keeps the keyboard's choice until the pointer actually moves.
 - **No slide between spaces.** Switching to a window in another desktop or full-screen app
   jumps there instantly instead of playing the macOS slide (Reduce motion only turns it into a
   fade). Reef posts the Dock a synthetic swipe too fast to animate, the technique from

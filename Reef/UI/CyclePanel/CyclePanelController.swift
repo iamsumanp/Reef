@@ -72,6 +72,10 @@ final class CyclePanelController: NSObject {
         self.modifierManager = modifierManager
         super.init()
         createPanel()
+        state.onClick = { [weak self] in
+            ActivityLog.log("  clicked a card")
+            self?.activateSelectedWindow(force: true)
+        }
     }
     
     private func createPanel() {
@@ -192,6 +196,7 @@ final class CyclePanelController: NSObject {
                 panelAnchorCenter = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
             }
             updatePanelSize()
+            state.pointerOrigin = NSEvent.mouseLocation
             panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             installFlagsMonitor()

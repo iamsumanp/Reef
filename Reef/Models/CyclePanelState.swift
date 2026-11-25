@@ -33,6 +33,22 @@ final class CyclePanelState: ObservableObject {
     @Published var items: [CyclePanelItem] = []
     @Published var selectedIndex: Int = 0
 
+    /// Set by the controller: switch to the selected item (a click on a card).
+    var onClick: (() -> Void)?
+    /// Where the pointer was when the panel appeared. A card only follows the pointer
+    /// once it has really moved, so a panel opening under a resting pointer keeps the
+    /// keyboard's choice.
+    var pointerOrigin: NSPoint?
+
+    /// The pointer moved since the panel appeared (latches once true).
+    func pointerHasMoved() -> Bool {
+        guard let origin = pointerOrigin else { return true }
+        let now = NSEvent.mouseLocation
+        guard hypot(now.x - origin.x, now.y - origin.y) > 3 else { return false }
+        pointerOrigin = nil
+        return true
+    }
+
     /// True when rows should make room for a window preview.
     @Published var showsPreviews: Bool = false
     /// Window previews captured so far, keyed by window id.

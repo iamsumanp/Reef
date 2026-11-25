@@ -427,6 +427,42 @@ enum WindowDetailsDebug {
             }
             return
         }
+        if command.hasPrefix("pointer ") {
+            // pointer <fx> <fy> [click]: glide the pointer to that fraction of the open
+            // switcher panel (0-1, from its top left), optionally click, then put it back.
+            let parts = command.split(separator: " ")
+            guard parts.count >= 3, let fx = Double(parts[1]), let fy = Double(parts[2]),
+                  let panel = NSApp.windows.first(where: { $0 is CyclePanel && $0.isVisible }),
+                  let screenHeight = NSScreen.screens.first?.frame.height else {
+                ActivityLog.log("pointer: no panel up")
+                return
+            }
+            let click = parts.count > 3
+            let frame = panel.frame
+            // Cocoa (bottom-left) to Quartz (top-left) coordinates.
+            let target = CGPoint(x: frame.minX + frame.width * fx, y: screenHeight - (frame.maxY - frame.height * fy))
+            let home = CGEvent(source: nil)?.location ?? target
+            let source = CGEventSource(stateID: .hidSystemState)
+            for step in 1...10 {
+                let t = Double(step) / 10
+                let point = CGPoint(x: home.x + (target.x - home.x) * t, y: home.y + (target.y - home.y) * t)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02 * t * 10) {
+                    CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
+                        .post(tap: .cghidEventTap)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                ActivityLog.log("pointer at \(Int(fx * 100))%,\(Int(fy * 100))% of the panel\(click ? ", clicking" : "")")
+                if click {
+                    CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: target, mouseButton: .left)?.post(tap: .cghidEventTap)
+                    CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: target, mouseButton: .left)?.post(tap: .cghidEventTap)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    CGWarpMouseCursorPosition(home)
+                }
+            }
+            return
+        }
         if command.hasPrefix("keys ") {
             // keys <key code> <hold ms> [presses]: real ⌥ + key events, ⌥ let go after the hold,
             // logging whether the panel appeared. Tests tap vs hold.

@@ -352,6 +352,7 @@ struct CyclePanelView: View {
                     }
                 )
                 .id(index)
+                .pointerSelects(index, in: state)
             }
         }
         .padding(CyclePanelLayout.listPadding)
@@ -390,6 +391,7 @@ struct CyclePanelView: View {
                     isSelected: index == state.selectedIndex
                 )
                 .id(index)
+                .pointerSelects(index, in: state)
             }
         }
         .padding(CyclePanelLayout.gridPadding)
@@ -454,6 +456,7 @@ struct CyclePanelView: View {
                                 isSelected: index == state.selectedIndex
                             )
                             .id(index)
+                            .pointerSelects(index, in: state)
                         }
                     }
                 }
@@ -468,6 +471,35 @@ struct CyclePanelView: View {
             .padding(.bottom, CyclePanelLayout.gridPadding)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Mouse
+
+/// Moving the pointer over a card selects it, so letting go of the modifier switches
+/// there; a click switches at once.
+private struct PointerSelection: ViewModifier {
+    let index: Int
+    let state: CyclePanelState
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                if case .active = phase, state.selectedIndex != index, state.pointerHasMoved() {
+                    state.selectedIndex = index
+                }
+            }
+            .onTapGesture {
+                state.selectedIndex = index
+                state.onClick?()
+            }
+    }
+}
+
+private extension View {
+    func pointerSelects(_ index: Int, in state: CyclePanelState) -> some View {
+        modifier(PointerSelection(index: index, state: state))
     }
 }
 
