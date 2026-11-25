@@ -286,7 +286,10 @@ class Application {
             windows = LastUsedWindows.ordered(windows, pid: pid,
                                               appIsActive: runningApplication?.isActive ?? false)
         }
-        
+
+        // A window that draws nothing (an app's transparent overlay) leads nowhere.
+        InvisibleWindows.check(windows.map(\.id))
+        windows.removeAll { InvisibleWindows.isInvisible($0.id) }
         return windows
     }
     

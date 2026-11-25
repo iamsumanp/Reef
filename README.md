@@ -108,7 +108,7 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   app's last window without the switcher ever appearing. Keep holding the modifier, or press the
   number twice, and the switcher with every window shows up, still on that last window; each
   press after that moves to the next one. Already in that app, a single press shows the switcher
-  at once, on its next window, since you're there to pick another one. Works the same for
+  at once, starting on the window you're in. Works the same for
   <kbd>modifier</kbd> + <kbd>`</kbd>. Set the hold under **Preferences → General → Show the
   switcher** ("Right away" brings back the old behaviour).
 - **No slide between spaces.** Switching to a window in another desktop or full-screen app
@@ -128,8 +128,9 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   "*App* isn't open — press the number again to open it"; letting go of the modifier or
   pressing <kbd>Esc</kbd> cancels. **Preferences → General → When the app isn't running** can
   also open it right away, or do nothing at all (no prompt, no launch).
-- **Only real windows.** Picture-in-picture videos (such as a browser's YouTube popup), palettes
-  and other windows that float above normal ones are left out, so they don't count as a second
+- **Only real windows.** Picture-in-picture videos (such as a browser's YouTube popup), palettes,
+  windows that draw nothing at all (such as Claude's transparent screen overlay) and other
+  windows that float above normal ones are left out, so they don't count as a second
   window or stop the number key from switching straight to the app.
 - **Reaches frozen apps too.** An app that has stopped responding can't bring its own window
   forward, and macOS lets no other app do it. Reef switches to the window's space and hides the
