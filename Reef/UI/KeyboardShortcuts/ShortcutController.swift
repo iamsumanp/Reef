@@ -159,15 +159,10 @@ final class ShortcutController {
             return
         }
 
-        // Determine starting index
-        var startIndex = 0
-        if let frontApp = Application.getFrontApplication(),
-           frontApp.title == binding.title {
-            // Already on this app, start at second window
-            startIndex = 1
-        }
-        
-        cycleController.showSwitcher(for: binding, startIndex: startIndex, number: number)
+        // Already in this app: the switcher opens at once, still on the window you're in
+        // (the original Reef started on its second window).
+        let alreadyInApp = Application.getFrontApplication()?.title == binding.title
+        cycleController.showSwitcher(for: binding, number: number, alreadyInApp: alreadyInApp)
     }
     
     func handleProfile(number: Int) {

@@ -93,7 +93,7 @@ final class CyclePanelController: NSObject {
     }
     
     // Called when user presses the configured window-switching shortcut.
-    func showSwitcher(for application: Application, startIndex: Int = 0, number: Int? = nil) {
+    func showSwitcher(for application: Application, startIndex: Int = 0, number: Int? = nil, alreadyInApp: Bool = false) {
         currentApplication = application
         let started = CFAbsoluteTimeGetCurrent()
         state.setApplication(application)
@@ -130,10 +130,10 @@ final class CyclePanelController: NSObject {
 
         // Nothing moves until the modifier is let go: switching on the press would jump
         // to the window before a second press could ask for the previews instead.
-        // Already in this app (the caller starts on its second window): the press is for
-        // another of its windows, so the panel shows at once, as it always did.
-        let alreadyInApp = startIndex > 0 && state.windows.count > 1
-        showPanel(delayed: state.launchPrompt == nil && !alreadyInApp)
+        // Already in this app: the press is for looking at its windows, so the panel
+        // shows at once, starting on the window you're in.
+        let showsAtOnce = alreadyInApp && state.windows.count > 1
+        showPanel(delayed: state.launchPrompt == nil && !showsAtOnce)
     }
 
     /// Shows the panel, or after a short hold: letting go of the modifier before then
