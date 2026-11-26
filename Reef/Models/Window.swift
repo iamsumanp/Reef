@@ -65,16 +65,20 @@ class Window: Identifiable {
             return
         }
 
+        // Activating the whole app gives focus back to the window it last had, which on
+        // another display stays visible and keeps the keyboard (a browser window on a
+        // second monitor). So the app is brought forward with this exact window as its key
+        // one, and only then is the window raised: AppKit apps (the Search browser) ignore
+        // a raise while they are in the background. AltTab uses the same order.
+        if let pid = application.pid, let id = cgWindowID, Spaces.makeKey(windowID: id, pid: pid) {
+            let raised = (try? self.element.performAction(.raise)) != nil
+            AXUIElementSetAttributeValue(self.element, kAXMainAttribute as CFString, kCFBooleanTrue)
+            ActivityLog.log("  made \(application.title) [\(id)] key\(raised ? " and raised it" : " (raise refused)") in \(ActivityLog.ms(since: started)) ms")
+            return
+        }
+
         do {
             try self.element.performAction(.raise)
-            // Activating the whole app gives focus back to the window it last had, which
-            // on another display stays visible and keeps the keyboard (a browser window
-            // on a second monitor). Make this exact window the key one instead.
-            AXUIElementSetAttributeValue(self.element, kAXMainAttribute as CFString, kCFBooleanTrue)
-            if let pid = application.pid, let id = cgWindowID, Spaces.makeKey(windowID: id, pid: pid) {
-                ActivityLog.log("  raised \(application.title) [\(id)] and made it key in \(ActivityLog.ms(since: started)) ms")
-                return
-            }
             self.application.activate()
             ActivityLog.log("  raised \(application.title) [\(id)] in \(ActivityLog.ms(since: started)) ms")
         } catch {
