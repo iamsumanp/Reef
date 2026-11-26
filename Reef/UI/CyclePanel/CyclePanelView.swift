@@ -301,6 +301,11 @@ struct CyclePanelView: View {
         }
     }
 
+    private func itemScreenTag(_ item: CyclePanelItem) -> CyclePanelState.ScreenTag? {
+        guard case .window(let window) = item else { return nil }
+        return state.screenTags[window.id]
+    }
+
     private func itemImage(_ item: CyclePanelItem) -> NSImage? {
         switch item {
         case .window(let window): return state.thumbnails[window.id]
@@ -353,6 +358,7 @@ struct CyclePanelView: View {
                 )
                 .id(index)
                 .pointerSelects(index, in: state)
+                .screenTagged(itemScreenTag(item), isSelected: index == state.selectedIndex)
             }
         }
         .padding(CyclePanelLayout.listPadding)
@@ -392,6 +398,7 @@ struct CyclePanelView: View {
                 )
                 .id(index)
                 .pointerSelects(index, in: state)
+                .screenTagged(itemScreenTag(item), isSelected: index == state.selectedIndex)
             }
         }
         .padding(CyclePanelLayout.gridPadding)
@@ -457,6 +464,7 @@ struct CyclePanelView: View {
                             )
                             .id(index)
                             .pointerSelects(index, in: state)
+                .screenTagged(itemScreenTag(item), isSelected: index == state.selectedIndex)
                         }
                     }
                 }
@@ -497,7 +505,37 @@ private struct PointerSelection: ViewModifier {
     }
 }
 
+/// The screen a window is on, when the switcher lists windows on several: the screen
+/// you're on as "BenQ · here" in the accent colour, others by name and dimmed.
+private struct ScreenTagged: ViewModifier {
+    let tag: CyclePanelState.ScreenTag?
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(tag.map { $0.isCurrent || isSelected ? 1 : 0.5 } ?? 1)
+            .overlay(alignment: .topLeading) {
+                if let tag {
+                    // Always the screen's name, so "here" is never a guess.
+                    Label(tag.isCurrent ? "\(tag.name) · here" : tag.name,
+                          systemImage: tag.isCurrent ? "location.fill" : "display")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(tag.isCurrent ? Color.accentColor : Color.black.opacity(0.65)))
+                        .padding(10)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
 private extension View {
+    func screenTagged(_ tag: CyclePanelState.ScreenTag?, isSelected: Bool) -> some View {
+        modifier(ScreenTagged(tag: tag, isSelected: isSelected))
+    }
+
     func pointerSelects(_ index: Int, in state: CyclePanelState) -> some View {
         modifier(PointerSelection(index: index, state: state))
     }

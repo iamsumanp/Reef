@@ -99,8 +99,11 @@ final class CyclePanelController: NSObject {
     // Called when user presses the configured window-switching shortcut.
     func showSwitcher(for application: Application, startIndex: Int = 0, number: Int? = nil, alreadyInApp: Bool = false) {
         currentApplication = application
+        // Read before Reef comes to the front: the screen you're working on.
+        let here = Self.currentDisplay()
         let started = CFAbsoluteTimeGetCurrent()
         state.setApplication(application)
+        tagScreens(here: here)
         ActivityLog.log("  switcher for \(application.title): \(state.items.count) items, built in \(ActivityLog.ms(since: started)) ms")
 
         // An app that is not running: left alone when so chosen in Preferences.
@@ -130,14 +133,86 @@ final class CyclePanelController: NSObject {
         }
 
         // A launch prompt waits for a second press, so it shows even after letting go.
+        // A tap would take you to another screen although the app has a window on the one
+        // you're working on: show the switcher, starting on the window here.
+        let otherScreen = alreadyInApp || state.launchPrompt != nil ? nil : windowOnCurrentScreen(here: here)
+        if let otherScreen { state.selectedIndex = otherScreen }
+
         if state.launchPrompt == nil, switchIfModifierAlreadyReleased() { return }
 
         // Nothing moves until the modifier is let go: switching on the press would jump
         // to the window before a second press could ask for the previews instead.
         // Already in this app: the press is for looking at its windows, so the panel
         // shows at once, starting on the window you're in.
-        let showsAtOnce = alreadyInApp && state.windows.count > 1
+        let showsAtOnce = (alreadyInApp && state.windows.count > 1) || otherScreen != nil
         showPanel(delayed: state.launchPrompt == nil && !showsAtOnce)
+    }
+
+    /// When the window a tap would go to is on another screen than the one you're working
+    /// on, and the app also has a window on this screen, the index of that window.
+    private func windowOnCurrentScreen(here: CGDirectDisplayID?) -> Int? {
+        guard state.windows.count > 1, case .window(let first) = state.currentItem,
+              let here,
+              let there = Self.display(ofWindow: first.id), there != here else { return nil }
+        let index = state.items.indices.first { index in
+            guard case .window(let window) = state.items[index],
+                  window.offscreenPlacement != .minimized else { return false }
+            return Self.display(ofWindow: window.id) == here
+        }
+        if let index, case .window(let window) = state.items[index] {
+            ActivityLog.log("  last window [\(first.id)] is on another screen; switcher starts on [\(window.id)] here")
+        }
+        return index
+    }
+
+    /// Tags every listed window with its screen when they are spread over more than one,
+    /// so the eye goes straight to the ones on the screen you're working on.
+    private func tagScreens(here: CGDirectDisplayID?) {
+        let ids = state.windows.map(\.id).filter { $0 != 0 }
+        let displays = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
+            Self.display(ofWindow: id).map { (id, $0) }
+        })
+        guard let here, Set(displays.values).count > 1 else {
+            state.screenTags = [:]
+            return
+        }
+        state.screenTags = displays.mapValues { display in
+            CyclePanelState.ScreenTag(name: Self.screenName(display), isCurrent: display == here)
+        }
+    }
+
+    /// "Mac" for the built-in display, "iPad" for Sidecar, otherwise the first word of the
+    /// display's name ("BenQ").
+    private static func screenName(_ display: CGDirectDisplayID) -> String {
+        if CGDisplayIsBuiltin(display) != 0 { return "Mac" }
+        let screen = NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
+        }
+        guard let name = screen?.localizedName else { return "Other screen" }
+        if name.localizedCaseInsensitiveContains("Sidecar") { return "iPad" }
+        return name.split(separator: " ").first.map(String.init) ?? name
+    }
+
+    /// The screen of the window you're in (before Reef comes forward), else the pointer's.
+    private static func currentDisplay() -> CGDirectDisplayID? {
+        if let id = Window.getFrontWindow()?.id, id != 0, let display = display(ofWindow: id) {
+            return display
+        }
+        return CGEvent(source: nil).flatMap { display(at: $0.location) }
+    }
+
+    private static func display(ofWindow id: CGWindowID) -> CGDirectDisplayID? {
+        guard let entry = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
+              let bounds = (entry[kCGWindowBounds as String] as? NSDictionary)
+                .flatMap({ CGRect(dictionaryRepresentation: $0) }) else { return nil }
+        return display(at: CGPoint(x: bounds.midX, y: bounds.midY))
+    }
+
+    private static func display(at point: CGPoint) -> CGDirectDisplayID? {
+        var display = CGDirectDisplayID(0)
+        var count: UInt32 = 0
+        guard CGGetDisplaysWithPoint(point, 1, &display, &count) == .success, count > 0 else { return nil }
+        return display
     }
 
     /// Shows the panel, or after a short hold: letting go of the modifier before then
@@ -217,6 +292,7 @@ final class CyclePanelController: NSObject {
         let bound = Set((profile?.bindings ?? []).compactMap { $0 })
         // Read before Reef comes to the front: the window the user is in right now.
         let frontWindowID = Window.getFrontWindow()?.id
+        let here = Self.currentDisplay()
 
         let started = CFAbsoluteTimeGetCurrent()
         let result = OtherApps.collect(excludingBundleIdentifiers: bound)
@@ -236,6 +312,7 @@ final class CyclePanelController: NSObject {
             state.selectedIndex = 1
         }
 
+        tagScreens(here: here)
         if switchIfModifierAlreadyReleased() { return }
 
         showPanel(delayed: true)

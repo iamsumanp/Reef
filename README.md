@@ -111,6 +111,10 @@ Feel free to submit pull requests, though we can't guarantee that we'll get to t
   at once, starting on the window you're in. Works the same for
   <kbd>modifier</kbd> + <kbd>`</kbd>. Set the hold under **Preferences → General → Show the
   switcher** ("Right away" brings back the old behaviour).
+- **Which screen.** When an app's windows are spread over several screens, each card is tagged
+  with its screen by name (Mac, iPad for Sidecar, or the monitor's maker, such as BenQ); the one
+  you're working on reads "BenQ · here" and stands out, and cards on other screens are dimmed. If a tap would take you to another screen while the app also has a window
+  on yours, the switcher opens instead, starting on the window here.
 - **Mouse in the switcher.** While it's open, moving the pointer over a card selects it (letting
   go of the modifier then switches there) and clicking a card switches at once. A switcher that
   opens under a resting pointer keeps the keyboard's choice until the pointer actually moves.

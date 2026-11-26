@@ -33,6 +33,14 @@ final class CyclePanelState: ObservableObject {
     @Published var items: [CyclePanelItem] = []
     @Published var selectedIndex: Int = 0
 
+    /// Which screen a window is on, shown only when the listed windows span several.
+    struct ScreenTag: Equatable {
+        let name: String
+        /// The screen you were working on when the switcher was opened.
+        let isCurrent: Bool
+    }
+    @Published var screenTags: [CGWindowID: ScreenTag] = [:]
+
     /// Set by the controller: switch to the selected item (a click on a card).
     var onClick: (() -> Void)?
     /// Where the pointer was when the panel appeared. A card only follows the pointer
@@ -360,6 +368,7 @@ final class CyclePanelState: ObservableObject {
     func reset() {
         items = []
         selectedIndex = 0
+        screenTags = [:]
         applicationTitle = ""
         showsPreviews = false
         thumbnails = [:]
